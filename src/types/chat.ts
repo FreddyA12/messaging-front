@@ -32,6 +32,8 @@ export interface MessageDTO {
   reactions: ReactionGroup[]
   readBy: number[]
   deliveredTo: number[]
+  isPinned?: boolean
+  isStarred?: boolean
 }
 
 export interface SendMessageRequest {
@@ -97,6 +99,11 @@ export interface MessageReadEvent {
   payload: { messageId: number; userId: number; at: string }
 }
 
+export interface MessagePinnedEvent {
+  type: 'MESSAGE_PINNED'
+  payload: { messageId: number; pinnedBy: number; at: string; isPinned: boolean }
+}
+
 export type ChatSocketEvent =
   | MessageNewEvent
   | MessageEditedEvent
@@ -109,3 +116,4 @@ export type ChatSocketEvent =
   | UserOfflineEvent
   | MessageDeliveredEvent
   | MessageReadEvent
+  | MessagePinnedEvent

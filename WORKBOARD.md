@@ -140,12 +140,12 @@ src/
 ## FASE 4 — Pin, Star, Forward, Search
 
 ### 4.1
-**Estado:** `[ ]`
-- [ ] `PinnedMessageBanner.tsx` — sticky arriba del chat, click para hacer scroll
-- [ ] `StarredMessagesView.tsx` — drawer lateral o panel
-- [ ] `ForwardDialog.tsx` — selector de chats con checkbox
-- [ ] Barra de búsqueda en chat (GET search), highlight en resultados
-- [ ] Scroll al mensaje citado con animación de highlight
+**Estado:** `[x]`
+- [x] `PinnedMessageBanner.tsx` — sticky arriba del chat, click para hacer scroll
+- [x] `StarredMessagesView.tsx` — drawer lateral o panel
+- [x] `ForwardDialog.tsx` — selector de chats con checkbox
+- [x] Barra de búsqueda en chat (GET search), highlight en resultados
+- [x] Scroll al mensaje citado con animación de highlight
 
 ---
 

@@ -10,6 +10,12 @@ interface MessageBubbleProps {
   onEdit: (message: Message) => void
   onDelete: (message: Message) => void
   onReact: (messageId: number, emoji: string) => void
+  onPin: (message: Message) => void
+  onStar: (message: Message) => void
+  onForward: (message: Message) => void
+  onScrollToReply?: (messageId: number) => void
+  setRef?: (id: number, el: HTMLDivElement | null) => void
+  isHighlighted?: boolean
 }
 
 type TickStatus = 'sent' | 'delivered' | 'read'
@@ -65,6 +71,12 @@ export function MessageBubble({
   onEdit,
   onDelete,
   onReact,
+  onPin,
+  onStar,
+  onForward,
+  onScrollToReply,
+  setRef,
+  isHighlighted,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId
   const [showMenu, setShowMenu] = useState(false)
@@ -76,6 +88,14 @@ export function MessageBubble({
   const emojiRef = useRef<HTMLDivElement>(null)
   const moreBtnRef = useRef<HTMLButtonElement>(null)
   const emojiBtnRef = useRef<HTMLButtonElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (setRef) {
+      setRef(message.id, wrapperRef.current)
+      return () => setRef(message.id, null)
+    }
+  }, [message.id, setRef])
 
   useEffect(() => {
     if (!showMenu && !showEmojiPicker) return
@@ -135,7 +155,7 @@ export function MessageBubble({
 
   if (message.deletedForEveryone) {
     return (
-      <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+      <div ref={wrapperRef} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
         <div className="max-w-[70%] px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-xs italic">
           Mensaje eliminado
         </div>
@@ -144,7 +164,11 @@ export function MessageBubble({
   }
 
   return (
-    <div className={`group flex items-end gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div
+      ref={wrapperRef}
+      className={`group flex items-end gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}
+        ${isHighlighted ? 'rounded-xl ring-2 ring-amber-300 dark:ring-amber-600' : ''}`}
+    >
       {/* Action buttons — visible on hover */}
       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mb-1">
         <button
@@ -190,9 +214,14 @@ export function MessageBubble({
             </p>
           )}
 
-          {/* Reply quote */}
+          {/* Reply quote — clickable to scroll */}
           {message.replyTo && (
-            <div className="border-l-2 border-primary-400 dark:border-primary-500 pl-2 mb-1.5 bg-black/5 dark:bg-white/5 rounded-r py-0.5">
+            <div
+              onClick={() => onScrollToReply?.(message.replyTo!.id)}
+              className="border-l-2 border-primary-400 dark:border-primary-500 pl-2 mb-1.5
+                         bg-black/5 dark:bg-white/5 rounded-r py-0.5
+                         cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            >
               <p className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 truncate">
                 {message.replyTo.senderName}
               </p>
@@ -218,6 +247,11 @@ export function MessageBubble({
           <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
             {message.editedAt && (
               <span className="text-[10px] text-gray-400 dark:text-gray-500">editado ·</span>
+            )}
+            {message.isPinned && (
+              <svg className="w-2.5 h-2.5 text-primary-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v2h2a1 1 0 010 2h-1v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8H3a1 1 0 110-2h2V4zm2 2h6V4H7v2zm-1 2v8h8V8H6z" />
+              </svg>
             )}
             <span className="text-[10px] text-gray-400 dark:text-gray-500">
               {formatTime(message.createdAt)}
@@ -260,13 +294,31 @@ export function MessageBubble({
             ...(menuPos.right !== undefined ? { right: menuPos.right } : { left: menuPos.left }),
             zIndex: 50,
           }}
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[140px]"
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]"
         >
           <button
             onClick={() => { onReply(message); setShowMenu(false) }}
             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Responder
+          </button>
+          <button
+            onClick={() => { onForward(message); setShowMenu(false) }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Reenviar
+          </button>
+          <button
+            onClick={() => { onStar(message); setShowMenu(false) }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {message.isStarred ? 'Quitar destacado' : 'Destacar'}
+          </button>
+          <button
+            onClick={() => { onPin(message); setShowMenu(false) }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            {message.isPinned ? 'Desfijar' : 'Fijar'}
           </button>
           {isOwn && (
             <button
