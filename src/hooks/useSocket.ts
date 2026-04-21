@@ -21,6 +21,7 @@ export function useSocket() {
 
 export function useChatSubscription(chatId: number | null) {
   const addMessage = useChatStore((s) => s.addMessage)
+  const updateChatLastMessage = useChatStore((s) => s.updateChatLastMessage)
 
   useEffect(() => {
     if (!chatId) return
@@ -31,6 +32,8 @@ export function useChatSubscription(chatId: number | null) {
         sub = subscribe(`/topic/chat.${chatId}`, (body) => {
           const msg = body as Message
           addMessage(msg)
+          // Actualiza el preview del sidebar en tiempo real
+          updateChatLastMessage(chatId, msg.content, msg.createdAt)
         })
       })
       .catch(console.error)
@@ -38,5 +41,5 @@ export function useChatSubscription(chatId: number | null) {
     return () => {
       sub?.unsubscribe()
     }
-  }, [chatId, addMessage])
+  }, [chatId, addMessage, updateChatLastMessage])
 }
