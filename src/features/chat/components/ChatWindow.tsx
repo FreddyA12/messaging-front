@@ -6,11 +6,16 @@ import { useAuthStore } from '../../../store/authStore'
 import { useChatSubscription, publishTypingStart, publishTypingStop } from '../../../hooks/useSocket'
 import { publish } from '../../../lib/socket'
 import { chatApi } from '../api'
+import { mediaApi } from '../../media/api'
+import { compressImage } from '../../../utils/imageCompression'
 import { MessageBubble } from './MessageBubble'
 import { ReplyPreview } from './ReplyPreview'
 import { PinnedMessageBanner } from './PinnedMessageBanner'
 import { StarredMessagesView } from './StarredMessagesView'
 import { ForwardDialog } from './ForwardDialog'
+import { AttachMenu, type AttachType } from './AttachMenu'
+import { AttachPreview } from './AttachPreview'
+import { MediaGallery } from '../../media/components/MediaGallery'
 
 const TYPING_STOP_DELAY = 3000
 
@@ -75,10 +80,19 @@ export function ChatWindow() {
   const [searchResults, setSearchResults] = useState<Message[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null)
+  const [showGallery, setShowGallery] = useState(false)
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [pendingAttach, setPendingAttach] = useState<{
+    file: File
+    type: AttachType
+    previewUrl: string | null
+  } | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const attachBtnRef = useRef<HTMLDivElement>(null)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isTypingRef = useRef(false)
@@ -122,8 +136,11 @@ export function ChatWindow() {
       setShowSearch(false)
       setSearchQuery('')
       setSearchResults([])
+      setShowGallery(false)
+      cancelAttach()
       inputRef.current?.focus()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId, setReplyTo, setEditingMessage])
 
   useEffect(() => {
@@ -144,6 +161,17 @@ export function ChatWindow() {
       setTimeout(() => searchInputRef.current?.focus(), 0)
     }
   }, [showSearch])
+
+  useEffect(() => {
+    if (!showAttachMenu) return
+    const handle = (e: MouseEvent) => {
+      if (attachBtnRef.current && !attachBtnRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [showAttachMenu])
 
   const setMessageRef = useCallback((id: number, el: HTMLDivElement | null) => {
     if (el) messageRefs.current.set(id, el)
@@ -194,9 +222,30 @@ export function ChatWindow() {
     }
   }, [activeChatId, currentUser])
 
+  const handleFileSelected = async (file: File, type: AttachType) => {
+    let processedFile = file
+    let previewUrl: string | null = null
+
+    if (type === 'IMAGE') {
+      try { processedFile = await compressImage(file) } catch { /* keep original */ }
+      previewUrl = URL.createObjectURL(processedFile)
+    } else if (type === 'VIDEO') {
+      previewUrl = URL.createObjectURL(file)
+    }
+
+    setPendingAttach({ file: processedFile, type, previewUrl })
+  }
+
+  const cancelAttach = () => {
+    if (pendingAttach?.previewUrl) URL.revokeObjectURL(pendingAttach.previewUrl)
+    setPendingAttach(null)
+    setUploadProgress(null)
+  }
+
   const sendMessage = async () => {
     const content = input.trim()
-    if (!content || !activeChatId) return
+    if (!content && !pendingAttach) return
+    if (!activeChatId) return
 
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
     stopTyping()
@@ -205,11 +254,28 @@ export function ChatWindow() {
       await chatApi.editMessage(editingMessage.id, content)
       setEditingMessage(null)
     } else {
+      let attachmentIds: number[] | undefined
+
+      if (pendingAttach) {
+        setUploadProgress(0)
+        try {
+          const res = await mediaApi.uploadFile(pendingAttach.file, (pct) => setUploadProgress(pct))
+          attachmentIds = [res.attachmentId]
+        } catch {
+          setUploadProgress(null)
+          return
+        }
+        if (pendingAttach.previewUrl) URL.revokeObjectURL(pendingAttach.previewUrl)
+        setPendingAttach(null)
+        setUploadProgress(null)
+      }
+
       publish('/app/chat.send', {
         chatId: activeChatId,
-        content,
-        type: 'TEXT',
+        content: content || null,
+        type: pendingAttach?.type ?? 'TEXT',
         replyToId: replyTo?.id,
+        attachmentIds,
       })
       setReplyTo(null)
     }
@@ -452,6 +518,20 @@ export function ChatWindow() {
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
               </button>
+              <button
+                onClick={() => { setShowGallery((v) => !v); setShowStarred(false) }}
+                className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors
+                  ${showGallery
+                    ? 'text-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                title="Galería"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              </button>
             </div>
           </div>
         )}
@@ -600,9 +680,40 @@ export function ChatWindow() {
           <ReplyPreview message={replyTo} onCancel={() => setReplyTo(null)} />
         )}
 
+        {/* Attach preview */}
+        {pendingAttach && (
+          <AttachPreview
+            file={pendingAttach.file}
+            type={pendingAttach.type}
+            previewUrl={pendingAttach.previewUrl}
+            progress={uploadProgress}
+            onCancel={cancelAttach}
+          />
+        )}
+
         {/* Input */}
         {!showSearch && (
           <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-end gap-2 shrink-0">
+            <div ref={attachBtnRef} className="relative shrink-0">
+              <button
+                onClick={() => setShowAttachMenu((v) => !v)}
+                className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400
+                           hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800
+                           transition-colors"
+                title="Adjuntar archivo"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
+              {showAttachMenu && (
+                <AttachMenu
+                  onSelect={(file, type) => { handleFileSelected(file, type); setShowAttachMenu(false) }}
+                  onClose={() => setShowAttachMenu(false)}
+                />
+              )}
+            </div>
             <textarea
               ref={inputRef}
               value={input}
@@ -619,7 +730,7 @@ export function ChatWindow() {
             />
             <button
               onClick={sendMessage}
-              disabled={!input.trim()}
+              disabled={!input.trim() && !pendingAttach}
               className="w-10 h-10 rounded-full bg-primary-500 hover:bg-primary-600
                          disabled:opacity-40 disabled:cursor-not-allowed
                          flex items-center justify-center text-white transition-colors shrink-0"
@@ -691,6 +802,15 @@ export function ChatWindow() {
           onClose={() => setShowStarred(false)}
           onScrollTo={(id) => { setShowStarred(false); scrollToMessage(id) }}
           onUnstar={handleUnstarFromPanel}
+        />
+      )}
+
+      {/* Media gallery panel */}
+      {showGallery && activeChatId && (
+        <MediaGallery
+          chatId={activeChatId}
+          onClose={() => setShowGallery(false)}
+          onScrollTo={(id) => { setShowGallery(false); scrollToMessage(id) }}
         />
       )}
     </div>

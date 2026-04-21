@@ -152,13 +152,13 @@ src/
 ## FASE 5 — Multimedia
 
 ### 5.1
-**Estado:** `[ ]`
-- [ ] Botón adjuntar → menú con opciones (imagen, video, doc, audio)
-- [ ] Compresión de imagen client-side con canvas antes de subir
-- [ ] Preview de imagen/video en burbuja (blob URL)
-- [ ] `MediaGallery.tsx`, `DocumentsTab.tsx`, `LinksTab.tsx`, `AudiosTab.tsx`
-- [ ] Reproductor de audio con waveform (wavesurfer.js)
-- [ ] Link preview card con título + descripción + imagen OG
+**Estado:** `[x]`
+- [x] Botón adjuntar → menú con opciones (imagen, video, doc, audio)
+- [x] Compresión de imagen client-side con canvas antes de subir
+- [x] Preview de imagen/video en burbuja (blob URL)
+- [x] `MediaGallery.tsx`, `DocumentsTab.tsx`, `LinksTab.tsx`, `AudiosTab.tsx`
+- [x] Reproductor de audio con waveform (wavesurfer.js)
+- [x] Link preview card con título + descripción + imagen OG
 
 ---
 

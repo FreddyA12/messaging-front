@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react'
 import type { Message } from '../../../store/chatStore'
+import { ImageBubble } from './ImageBubble'
+import { VideoBubble } from './VideoBubble'
+import { AudioBubble } from './AudioBubble'
+import { DocumentBubble } from './DocumentBubble'
+import { LinkPreviewCard } from './LinkPreviewCard'
 
 interface MessageBubbleProps {
   message: Message
@@ -236,11 +241,32 @@ export function MessageBubble({
             <p className="text-[10px] text-gray-400 italic mb-0.5">Reenviado</p>
           )}
 
+          {/* Attachments */}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="flex flex-col gap-1.5 mb-1">
+              {message.attachments.map((att) => {
+                if (att.type === 'IMAGE') return <ImageBubble key={att.id} attachment={att} />
+                if (att.type === 'VIDEO') return <VideoBubble key={att.id} attachment={att} />
+                if (att.type === 'AUDIO') return <AudioBubble key={att.id} attachment={att} isOwn={isOwn} />
+                return <DocumentBubble key={att.id} attachment={att} isOwn={isOwn} />
+              })}
+            </div>
+          )}
+
           {/* Content */}
           {message.content && (
             <p className="text-sm whitespace-pre-wrap break-words leading-snug">
               {message.content}
             </p>
+          )}
+
+          {/* Link previews */}
+          {message.linkPreviews && message.linkPreviews.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {message.linkPreviews.map((lp, i) => (
+                <LinkPreviewCard key={i} preview={lp} />
+              ))}
+            </div>
           )}
 
           {/* Timestamp + edited + ticks */}
