@@ -14,7 +14,7 @@ Al terminar cada fase, actualiza la tabla de abajo con los archivos modificados,
 | 2 — ChatList + ChatWindow + STOMP | ✅ | `store/chatStore.ts`, `hooks/useSocket.ts`, `features/chat/components/ChatList.tsx`, `ChatWindow.tsx`, `MessageBubble.tsx`, `NewChatModal.tsx` | STOMP conectado. Paginación cursor-based. ChatSocketEvent discriminado. |
 | 3 — Mensajería avanzada | ✅ | `types/chat.ts`, `store/chatStore.ts`, `hooks/useSocket.ts`, `features/chat/components/MessageBubble.tsx`, `ChatWindow.tsx`, `ReplyPreview.tsx`, `features/chat/api.ts` | Ver detalle abajo. |
 | 4 — Pin, Star, Forward, Search | ✅ | `types/chat.ts`, `store/chatStore.ts`, `hooks/useSocket.ts`, `features/chat/api.ts`, `MessageBubble.tsx`, `ChatWindow.tsx`, `PinnedMessageBanner.tsx`, `StarredMessagesView.tsx`, `ForwardDialog.tsx` | Ver detalle abajo. |
-| 5 — Multimedia | 🔲 | — | — |
+| 5 — Multimedia | ✅ | `types/chat.ts`, `store/chatStore.ts`, `utils/imageCompression.ts`, `hooks/useAttachmentBlob.ts`, `features/media/api.ts`, `features/media/components/MediaGallery.tsx`, `MediaTab.tsx`, `DocumentsTab.tsx`, `LinksTab.tsx`, `AudiosTab.tsx`, `features/chat/components/ImageBubble.tsx`, `VideoBubble.tsx`, `AudioBubble.tsx`, `DocumentBubble.tsx`, `LinkPreviewCard.tsx`, `AttachMenu.tsx`, `AttachPreview.tsx`, `MessageBubble.tsx`, `ChatWindow.tsx` | Ver detalle abajo. |
 | 6 — Llamadas WebRTC | 🔲 | — | — |
 | 7 — Grupos | 🔲 | — | — |
 | 8 — Personalización | 🔲 | — | — |
@@ -210,6 +210,48 @@ Props nuevas: `onPin`, `onStar`, `onForward`, `onScrollToReply`, `setRef`, `isHi
 - Botón estrella en header → abre `StarredMessagesView`
 - `PinnedMessageBanner` bajo el header cuando hay pinned messages
 - Carga pinned al cambiar de chat activo via `useEffect`
+
+---
+
+## Fase 5 — Detalle de implementación
+
+### Nuevos tipos (`src/types/chat.ts`)
+- `AttachmentDTO` — `{ id, type, filename, mimeType, sizeBytes, thumbnailId? }`
+- `LinkPreviewDTO` — `{ url, title, description, imageUrl, siteName }`
+- `GalleryItemDTO` — attachment con `messageId`, `sentAt`, `senderName` (para galería)
+- `LinkItemDTO` — link con `messageId`, `sentAt`
+- `MessageDTO.attachments?: AttachmentDTO[]`, `MessageDTO.linkPreviews?: LinkPreviewDTO[]`
+
+### Utilidades nuevas
+- `src/utils/imageCompression.ts` — comprime imagen a JPEG vía canvas (max 1920px, quality 0.8)
+- `src/hooks/useAttachmentBlob.ts` — fetcha un attachment con axios (JWT), crea object URL con caché en-memoria para no re-descargar
+
+### Media API (`src/features/media/api.ts`)
+- `uploadFile(file, onProgress?)` — POST multipart a `/api/media/upload`, devuelve `UploadResponse { attachmentId, ... }`
+- `getGallery(chatId, type)`, `getDocuments`, `getLinks`, `getAudios`
+
+### Componentes de burbuja (`src/features/chat/components/`)
+- `ImageBubble` — muestra thumbnail vía `useAttachmentBlob`; click abre lightbox con imagen completa
+- `VideoBubble` — carga el video vía blob URL con elemento `<video controls>`
+- `AudioBubble` — wavesurfer.js v7; play/pause + waveform + timer; `ws.loadBlob` vía hook
+- `DocumentBubble` — ícono por extensión, filename, tamaño; click descarga el archivo
+- `LinkPreviewCard` — OG card con imagen externa, título, descripción, hostname
+
+### Galería (`src/features/media/components/`)
+- `MediaGallery` — panel lateral w-80 con 4 tabs: Medios / Docs / Links / Audio
+- `MediaTab` — grid 3 columnas con thumbnails lazy, badge play en videos
+- `DocumentsTab` — lista con ícono, nombre, tamaño, botón descargar
+- `LinksTab` — lista con imagen OG, título, botón abrir
+- `AudiosTab` — usa `AudioBubble` por cada audio + botón "ir al mensaje"
+
+### Adjuntar en ChatWindow (`src/features/chat/components/ChatWindow.tsx`)
+- Botón paperclip abre `AttachMenu` (posición absoluta con cierre al clic fuera)
+- `AttachMenu` — 4 opciones (Imagen, Video, Audio, Documento); abre `<input type="file">` por tipo
+- Al seleccionar imagen → `compressImage` → object URL para preview
+- `AttachPreview` — muestra preview + barra de progreso durante upload
+- `sendMessage` sube el archivo primero (`mediaApi.uploadFile`), luego envía mensaje con `attachmentIds`
+- Botón enviar habilitado también cuando hay `pendingAttach` aunque el input esté vacío (permite enviar sin caption)
+- Botón galería (grid icon) en header → abre `MediaGallery` como panel lateral derecho
 
 ---
 

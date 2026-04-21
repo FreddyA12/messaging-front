@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { MessageType, ReactionGroup } from '../types/chat'
+import type { MessageType, ReactionGroup, AttachmentDTO, LinkPreviewDTO } from '../types/chat'
 
 export interface ChatListItem {
   id: number
@@ -29,6 +29,8 @@ export interface Message {
   deliveredTo: number[]
   isPinned: boolean
   isStarred: boolean
+  attachments: AttachmentDTO[]
+  linkPreviews: LinkPreviewDTO[]
 }
 
 interface PresenceEntry {

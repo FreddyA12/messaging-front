@@ -1,3 +1,43 @@
+export type AttachmentType = 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT'
+
+export interface AttachmentDTO {
+  id: number
+  type: AttachmentType
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  thumbnailId?: number
+}
+
+export interface LinkPreviewDTO {
+  url: string
+  title: string | null
+  description: string | null
+  imageUrl: string | null
+  siteName: string | null
+}
+
+export interface GalleryItemDTO {
+  attachmentId: number
+  type: AttachmentType
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  messageId: number
+  sentAt: string
+  senderName: string
+  thumbnailId?: number
+}
+
+export interface LinkItemDTO {
+  url: string
+  title: string | null
+  description: string | null
+  imageUrl: string | null
+  messageId: number
+  sentAt: string
+}
+
 export interface ChatDTO {
   id: number
   type: 'PRIVATE' | 'GROUP'
@@ -34,6 +74,8 @@ export interface MessageDTO {
   deliveredTo: number[]
   isPinned?: boolean
   isStarred?: boolean
+  attachments?: AttachmentDTO[]
+  linkPreviews?: LinkPreviewDTO[]
 }
 
 export interface SendMessageRequest {
