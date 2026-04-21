@@ -1,10 +1,15 @@
 import { useAuthStore } from '../store/authStore'
 import { useAuth } from '../hooks/useAuth'
+import { useSocket } from '../hooks/useSocket'
 import { ChatList } from '../features/chat/components/ChatList'
+import { ChatWindow } from '../features/chat/components/ChatWindow'
 
 export function MainLayout() {
   const user = useAuthStore((s) => s.user)
   const { logout } = useAuth()
+
+  // Establish and maintain the STOMP WebSocket connection for this session
+  useSocket()
 
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900">
@@ -39,9 +44,9 @@ export function MainLayout() {
         </div>
       </aside>
 
-      {/* Main area — ChatWindow will be placed here in Phase 2.2 */}
-      <main className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
-        Selecciona un chat para comenzar
+      {/* Chat window */}
+      <main className="flex-1 flex overflow-hidden">
+        <ChatWindow />
       </main>
     </div>
   )
