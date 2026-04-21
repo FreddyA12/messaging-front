@@ -16,6 +16,24 @@ export const chatApi = {
   sendMessage: (data: SendMessageRequest) =>
     api.post<MessageDTO>('/api/messages', data).then((r) => r.data),
 
+  editMessage: (id: number, content: string) =>
+    api.patch<MessageDTO>(`/api/messages/${id}`, { content }).then((r) => r.data),
+
+  deleteMessage: (id: number, forEveryone: boolean) =>
+    api.delete(`/api/messages/${id}`, { params: { forEveryone } }),
+
   markRead: (messageId: number) =>
     api.post(`/api/messages/${messageId}/read`),
+
+  addReaction: (id: number, emoji: string) =>
+    api.post(`/api/messages/${id}/reactions`, { emoji }),
+
+  removeReaction: (id: number, emoji: string) =>
+    api.delete(`/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`),
+
+  starMessage: (id: number) =>
+    api.post(`/api/messages/${id}/star`),
+
+  unstarMessage: (id: number) =>
+    api.delete(`/api/messages/${id}/star`),
 }

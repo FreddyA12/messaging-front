@@ -1,17 +1,137 @@
+import { useState, useRef, useEffect } from 'react'
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react'
 import type { Message } from '../../../store/chatStore'
 
 interface MessageBubbleProps {
   message: Message
   currentUserId: number
   chatType: 'PRIVATE' | 'GROUP'
+  onReply: (message: Message) => void
+  onEdit: (message: Message) => void
+  onDelete: (message: Message) => void
+  onReact: (messageId: number, emoji: string) => void
+}
+
+type TickStatus = 'sent' | 'delivered' | 'read'
+
+function getTickStatus(message: Message, currentUserId: number): TickStatus {
+  if (message.readBy.some((id) => id !== currentUserId)) return 'read'
+  if (message.deliveredTo.some((id) => id !== currentUserId)) return 'delivered'
+  return 'sent'
+}
+
+function Ticks({ status }: { status: TickStatus }) {
+  if (status === 'sent') {
+    return (
+      <svg
+        className="w-3.5 h-3 text-gray-400 shrink-0"
+        viewBox="0 0 10 8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M1 4l2.5 2.5L9 1" />
+      </svg>
+    )
+  }
+  const color = status === 'read' ? 'text-blue-500' : 'text-gray-400'
+  return (
+    <svg
+      className={`w-5 h-3 ${color} shrink-0`}
+      viewBox="0 0 14 8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M1 4l2.5 2.5L8 1" />
+      <path d="M5 4l2.5 2.5L13 1" />
+    </svg>
+  )
 }
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
 }
 
-export function MessageBubble({ message, currentUserId, chatType }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  currentUserId,
+  chatType,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact,
+}: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId
+  const [showMenu, setShowMenu] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right?: number; left?: number } | null>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [emojiPos, setEmojiPos] = useState<{ bottom: number; right?: number; left?: number } | null>(null)
+
+  const menuRef = useRef<HTMLDivElement>(null)
+  const emojiRef = useRef<HTMLDivElement>(null)
+  const moreBtnRef = useRef<HTMLButtonElement>(null)
+  const emojiBtnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!showMenu && !showEmojiPicker) return
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        showMenu &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        moreBtnRef.current &&
+        !moreBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowMenu(false)
+      }
+      if (
+        showEmojiPicker &&
+        emojiRef.current &&
+        !emojiRef.current.contains(e.target as Node) &&
+        emojiBtnRef.current &&
+        !emojiBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowEmojiPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showMenu, showEmojiPicker])
+
+  const openMenu = () => {
+    const rect = moreBtnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setMenuPos(
+      isOwn
+        ? { top: rect.bottom + 4, right: window.innerWidth - rect.right }
+        : { top: rect.bottom + 4, left: rect.left },
+    )
+    setShowMenu(true)
+  }
+
+  const openEmojiPicker = () => {
+    const rect = emojiBtnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const bottom = window.innerHeight - rect.top + 4
+    setEmojiPos(
+      isOwn
+        ? { bottom, right: window.innerWidth - rect.right }
+        : { bottom, left: rect.left },
+    )
+    setShowEmojiPicker(true)
+  }
+
+  const handleEmojiClick = (data: EmojiClickData) => {
+    onReact(message.id, data.emoji)
+    setShowEmojiPicker(false)
+  }
+
+  const tickStatus = isOwn ? getTickStatus(message, currentUserId) : null
 
   if (message.deletedForEveryone) {
     return (
@@ -24,48 +144,161 @@ export function MessageBubble({ message, currentUserId, chatType }: MessageBubbl
   }
 
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[70%] px-3 py-1.5 rounded-2xl shadow-sm
-          ${isOwn
-            ? 'bg-bubble-outgoing text-gray-900 rounded-br-sm'
-            : 'bg-bubble-incoming dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm border border-gray-100 dark:border-transparent'
-          }`}
-      >
-        {/* Sender name — groups, incoming only */}
-        {!isOwn && chatType === 'GROUP' && (
-          <p className="text-xs font-semibold text-primary-600 dark:text-primary-400 mb-0.5 truncate">
-            {message.senderName}
-          </p>
-        )}
-
-        {/* Text content */}
-        {message.content && (
-          <p className="text-sm whitespace-pre-wrap break-words leading-snug">
-            {message.content}
-          </p>
-        )}
-
-        {/* Timestamp + edit label + tick placeholder */}
-        <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-          {message.editedAt && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">editado ·</span>
-          )}
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">
-            {formatTime(message.createdAt)}
-          </span>
-          {/* Single tick placeholder — Phase 3 will complete read/delivered state */}
-          {isOwn && (
-            <svg className="w-3 h-3 text-gray-400 dark:text-gray-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-          )}
-        </div>
+    <div className={`group flex items-end gap-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+      {/* Action buttons — visible on hover */}
+      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mb-1">
+        <button
+          ref={emojiBtnRef}
+          onClick={openEmojiPicker}
+          className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400
+                     hover:text-gray-600 dark:hover:text-gray-200
+                     hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title="Reaccionar"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        <button
+          ref={moreBtnRef}
+          onClick={openMenu}
+          className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400
+                     hover:text-gray-600 dark:hover:text-gray-200
+                     hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title="Más opciones"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+          </svg>
+        </button>
       </div>
+
+      {/* Bubble + reactions */}
+      <div className={`max-w-[70%] flex flex-col gap-1 ${isOwn ? 'items-end' : 'items-start'}`}>
+        <div
+          className={`px-3 py-1.5 rounded-2xl shadow-sm
+            ${isOwn
+              ? 'bg-bubble-outgoing text-gray-900 rounded-br-sm'
+              : 'bg-bubble-incoming dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm border border-gray-100 dark:border-transparent'
+            }`}
+        >
+          {/* Sender name in groups */}
+          {!isOwn && chatType === 'GROUP' && (
+            <p className="text-xs font-semibold text-primary-600 dark:text-primary-400 mb-0.5 truncate">
+              {message.senderName}
+            </p>
+          )}
+
+          {/* Reply quote */}
+          {message.replyTo && (
+            <div className="border-l-2 border-primary-400 dark:border-primary-500 pl-2 mb-1.5 bg-black/5 dark:bg-white/5 rounded-r py-0.5">
+              <p className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 truncate">
+                {message.replyTo.senderName}
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                {message.replyTo.content ?? 'Archivo adjunto'}
+              </p>
+            </div>
+          )}
+
+          {/* Forwarded label */}
+          {message.isForwarded && (
+            <p className="text-[10px] text-gray-400 italic mb-0.5">Reenviado</p>
+          )}
+
+          {/* Content */}
+          {message.content && (
+            <p className="text-sm whitespace-pre-wrap break-words leading-snug">
+              {message.content}
+            </p>
+          )}
+
+          {/* Timestamp + edited + ticks */}
+          <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+            {message.editedAt && (
+              <span className="text-[10px] text-gray-400 dark:text-gray-500">editado ·</span>
+            )}
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              {formatTime(message.createdAt)}
+            </span>
+            {isOwn && tickStatus && <Ticks status={tickStatus} />}
+          </div>
+        </div>
+
+        {/* Reactions */}
+        {message.reactions.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {message.reactions.map((r) => {
+              const iReacted = r.userIds.includes(currentUserId)
+              return (
+                <button
+                  key={r.emoji}
+                  onClick={() => onReact(message.id, r.emoji)}
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border transition-colors
+                    ${iReacted
+                      ? 'bg-primary-50 dark:bg-primary-900/30 border-primary-300 dark:border-primary-600 text-primary-700 dark:text-primary-300'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  <span>{r.emoji}</span>
+                  <span>{r.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Context menu — fixed position */}
+      {showMenu && menuPos && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: menuPos.top,
+            ...(menuPos.right !== undefined ? { right: menuPos.right } : { left: menuPos.left }),
+            zIndex: 50,
+          }}
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[140px]"
+        >
+          <button
+            onClick={() => { onReply(message); setShowMenu(false) }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Responder
+          </button>
+          {isOwn && (
+            <button
+              onClick={() => { onEdit(message); setShowMenu(false) }}
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              Editar
+            </button>
+          )}
+          <button
+            onClick={() => { onDelete(message); setShowMenu(false) }}
+            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Eliminar
+          </button>
+        </div>
+      )}
+
+      {/* Emoji picker — fixed position */}
+      {showEmojiPicker && emojiPos && (
+        <div
+          ref={emojiRef}
+          style={{
+            position: 'fixed',
+            bottom: emojiPos.bottom,
+            ...(emojiPos.right !== undefined ? { right: emojiPos.right } : { left: emojiPos.left }),
+            zIndex: 50,
+          }}
+        >
+          <EmojiPicker onEmojiClick={handleEmojiClick} height={350} />
+        </div>
+      )}
     </div>
   )
 }

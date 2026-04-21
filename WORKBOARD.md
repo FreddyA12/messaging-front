@@ -115,25 +115,25 @@ src/
 ## FASE 3 — UI de mensajería avanzada
 
 ### 3.1 — Ticks y presencia
-**Estado:** `[ ]`
-- [ ] Ticks en `MessageBubble`: ✓ (enviado) · ✓✓ gris (entregado) · ✓✓ azul (leído)
-- [ ] Subscripción a `/topic/presence` → actualizar `isOnline` en chatStore
-- [ ] Header del chat muestra "en línea" o "visto hace X"
+**Estado:** `[x]`
+- [x] Ticks en `MessageBubble`: ✓ (enviado) · ✓✓ gris (entregado) · ✓✓ azul (leído)
+- [x] Subscripción a `/topic/presence` → actualizar `isOnline` en chatStore
+- [x] Header del chat muestra "en línea" o "visto hace X"
 
 ### 3.2 — Reply, Edit, Delete
-**Estado:** `[ ]`
-- [ ] Click en mensaje → menú contextual (responder, editar, eliminar, destacar, reenviar)
-- [ ] `ReplyPreview.tsx` — banner sobre el input al responder
-- [ ] La burbuja muestra el mensaje citado con clic para scroll
-- [ ] Modo edición: el input se llena con el contenido actual
-- [ ] Dialog de eliminar: "Para mí" / "Para todos"
+**Estado:** `[x]`
+- [x] Click en mensaje → menú contextual (responder, editar, eliminar, destacar, reenviar)
+- [x] `ReplyPreview.tsx` — banner sobre el input al responder
+- [x] La burbuja muestra el mensaje citado con clic para scroll
+- [x] Modo edición: el input se llena con el contenido actual
+- [x] Dialog de eliminar: "Para mí" / "Para todos"
 
 ### 3.3 — Reacciones y typing
-**Estado:** `[ ]`
-- [ ] Long-press/hover en burbuja → emoji picker (emoji-picker-react)
-- [ ] Reacciones debajo de la burbuja agrupadas por emoji
-- [ ] "Juan está escribiendo..." al recibir TYPING_START
-- [ ] Enviar TYPING_START al escribir (debounced) y TYPING_STOP al parar
+**Estado:** `[x]`
+- [x] Long-press/hover en burbuja → emoji picker (emoji-picker-react)
+- [x] Reacciones debajo de la burbuja agrupadas por emoji
+- [x] "Juan está escribiendo..." al recibir TYPING_START
+- [x] Enviar TYPING_START al escribir (debounced) y TYPING_STOP al parar
 
 ---
 
