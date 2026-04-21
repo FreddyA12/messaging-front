@@ -22,6 +22,8 @@ export interface Message {
   deletedForEveryone: boolean
   replyTo: Message | null
   isForwarded: boolean
+  reactions: { emoji: string; count: number; userIds: number[] }[]
+  readBy: number[]
 }
 
 interface ChatState {
