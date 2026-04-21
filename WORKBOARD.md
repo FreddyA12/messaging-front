@@ -70,45 +70,45 @@ src/
 ## FASE 2 — ChatList + ChatWindow + STOMP
 
 ### 2.1 — ChatList component
-**Estado:** `[ ]`
+**Estado:** `[x]`
 
-- [ ] `src/features/chat/components/ChatList.tsx`:
+- [x] `src/features/chat/components/ChatList.tsx`:
   - Lista de `ChatListItem` con avatar, nombre, último mensaje, hora, badge unread
   - Skeleton loading mientras carga
   - Barra de búsqueda para filtrar chats localmente
   - Botón "+" para iniciar nuevo chat (abre modal de búsqueda de usuario)
   - Al hacer click → `setActiveChat(chatId)`
 
-- [ ] `src/features/chat/components/NewChatModal.tsx`:
+- [x] `src/features/chat/components/NewChatModal.tsx`:
   - Input de búsqueda de usuario (llama a `GET /api/users/search?q=`)
   - Lista de resultados con avatar + nombre
   - Al seleccionar → `createPrivateChat(userId)` → abre el chat
 
 ### 2.2 — ChatWindow + MessageBubble
-**Estado:** `[ ]`
+**Estado:** `[x]`
 **Depende de:** 2.1
 
-- [ ] `src/features/chat/components/ChatWindow.tsx`:
+- [x] `src/features/chat/components/ChatWindow.tsx`:
   - Header: avatar, nombre, estado online/offline
   - Área de mensajes con `overflow-y-auto` + `flex-col-reverse` para anclar al fondo
   - Scroll infinito hacia arriba (IntersectionObserver) → `prependMessages`
   - Input de texto con botón enviar (Enter también envía)
   - Subscripción STOMP a `/topic/chat.{chatId}` al montar
 
-- [ ] `src/features/chat/components/MessageBubble.tsx`:
+- [x] `src/features/chat/components/MessageBubble.tsx`:
   - Burbuja propia (derecha, color `bubble-outgoing`) vs ajena (izquierda, `bubble-incoming`)
   - Hora formateada
   - Ticks placeholder (se completan en Fase 3)
   - Nombre del remitente en grupos
 
-- [ ] Actualizar `MainLayout.tsx` para renderizar `ChatList` y `ChatWindow`
+- [x] Actualizar `MainLayout.tsx` para renderizar `ChatList` y `ChatWindow`
 
 ### 2.3 — Integración STOMP en chat
-**Estado:** `[ ]`
+**Estado:** `[x]`
 
-- [ ] `src/hooks/useSocket.ts` — completar para que acepte suscripciones por chat
-- [ ] Al recibir `MESSAGE_NEW` → `addMessage(message)` en chatStore
-- [ ] Enviar mensaje via `publish('/app/chat.send', {...})`
+- [x] `src/hooks/useSocket.ts` — completar para que acepte suscripciones por chat
+- [x] Al recibir `MESSAGE_NEW` → `addMessage(message)` en chatStore
+- [x] Enviar mensaje via `publish('/app/chat.send', {...})`
 
 ---
 
