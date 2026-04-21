@@ -27,6 +27,8 @@ export interface Message {
   reactions: ReactionGroup[]
   readBy: number[]
   deliveredTo: number[]
+  isPinned: boolean
+  isStarred: boolean
 }
 
 interface PresenceEntry {
@@ -47,6 +49,8 @@ interface ChatState {
   typing: Record<number, TypingEntry[]>
   replyTo: Message | null
   editingMessage: Message | null
+  pinnedMessages: Record<number, Message[]>
+  starredMessages: Message[]
 
   setChats: (chats: ChatListItem[]) => void
   setActiveChat: (chatId: number | null) => void
@@ -64,6 +68,10 @@ interface ChatState {
   setTyping: (chatId: number, userId: number, userName: string, isTyping: boolean) => void
   setReplyTo: (message: Message | null) => void
   setEditingMessage: (message: Message | null) => void
+  setPinnedMessages: (chatId: number, messages: Message[]) => void
+  setPinned: (messageId: number, chatId: number, isPinned: boolean) => void
+  setStarredMessages: (messages: Message[]) => void
+  toggleStarred: (messageId: number, isStarred: boolean) => void
 }
 
 function mapAllMessages(
@@ -85,6 +93,8 @@ export const useChatStore = create<ChatState>((set) => ({
   typing: {},
   replyTo: null,
   editingMessage: null,
+  pinnedMessages: {},
+  starredMessages: [],
 
   setChats: (chats) => set({ chats }),
   setActiveChat: (chatId) => set({ activeChatId: chatId }),
@@ -185,4 +195,31 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
   setReplyTo: (message) => set({ replyTo: message }),
   setEditingMessage: (message) => set({ editingMessage: message }),
+  setPinnedMessages: (chatId, messages) =>
+    set((s) => ({ pinnedMessages: { ...s.pinnedMessages, [chatId]: messages } })),
+  setPinned: (messageId, chatId, isPinned) =>
+    set((s) => {
+      const current = s.pinnedMessages[chatId] ?? []
+      const updated = isPinned
+        ? [...current.filter((m) => m.id !== messageId), ...(
+            Object.values(s.messages).flat().filter((m) => m.id === messageId)
+          )]
+        : current.filter((m) => m.id !== messageId)
+      return {
+        pinnedMessages: { ...s.pinnedMessages, [chatId]: updated },
+        messages: mapAllMessages(s.messages, (m) =>
+          m.id === messageId ? { ...m, isPinned } : m,
+        ),
+      }
+    }),
+  setStarredMessages: (messages) => set({ starredMessages: messages }),
+  toggleStarred: (messageId, isStarred) =>
+    set((s) => ({
+      messages: mapAllMessages(s.messages, (m) =>
+        m.id === messageId ? { ...m, isStarred } : m,
+      ),
+      starredMessages: isStarred
+        ? s.starredMessages
+        : s.starredMessages.filter((m) => m.id !== messageId),
+    })),
 }))

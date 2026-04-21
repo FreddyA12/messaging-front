@@ -1,6 +1,10 @@
 import { api } from '../../lib/axios'
 import type { ChatDTO, MessageDTO, SendMessageRequest } from '../../types/chat'
 
+export interface ForwardRequest {
+  chatIds: number[]
+}
+
 export const chatApi = {
   getChats: () =>
     api.get<ChatDTO[]>('/api/chats').then((r) => r.data),
@@ -36,4 +40,22 @@ export const chatApi = {
 
   unstarMessage: (id: number) =>
     api.delete(`/api/messages/${id}/star`),
+
+  pinMessage: (id: number) =>
+    api.post(`/api/messages/${id}/pin`),
+
+  unpinMessage: (id: number) =>
+    api.delete(`/api/messages/${id}/pin`),
+
+  forwardMessage: (id: number, chatIds: number[]) =>
+    api.post(`/api/messages/${id}/forward`, { chatIds }),
+
+  getPinnedMessages: (chatId: number) =>
+    api.get<MessageDTO[]>(`/api/chats/${chatId}/pinned`).then((r) => r.data),
+
+  getStarredMessages: () =>
+    api.get<MessageDTO[]>('/api/messages/starred').then((r) => r.data),
+
+  searchMessages: (chatId: number, q: string) =>
+    api.get<MessageDTO[]>(`/api/chats/${chatId}/messages/search`, { params: { q } }).then((r) => r.data),
 }
