@@ -16,7 +16,7 @@ export interface Message {
   senderId: number
   senderName: string
   content: string | null
-  type: string
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'SYSTEM'
   createdAt: string
   editedAt: string | null
   deletedForEveryone: boolean
@@ -36,6 +36,7 @@ interface ChatState {
   setMessages: (chatId: number, messages: Message[]) => void
   addMessage: (message: Message) => void
   prependMessages: (chatId: number, messages: Message[]) => void
+  updateLastMessage: (chatId: number, content: string | null, at: string) => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -57,4 +58,10 @@ export const useChatStore = create<ChatState>((set) => ({
       const existing = s.messages[chatId] ?? []
       return { messages: { ...s.messages, [chatId]: [...messages, ...existing] } }
     }),
+  updateLastMessage: (chatId, content, at) =>
+    set((s) => ({
+      chats: s.chats.map((c) =>
+        c.id === chatId ? { ...c, lastMessage: content, lastMessageAt: at } : c,
+      ),
+    })),
 }))
