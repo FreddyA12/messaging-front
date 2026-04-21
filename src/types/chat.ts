@@ -37,3 +37,14 @@ export interface SendMessageRequest {
   replyToId?: number
   attachmentIds?: number[]
 }
+
+export type ChatSocketEventType =
+  | 'MESSAGE_NEW'
+  | 'MESSAGE_EDIT'
+  | 'MESSAGE_DELETE'
+  | 'REACTION_UPDATE'
+
+export interface ChatSocketEvent {
+  type: ChatSocketEventType
+  payload: MessageDTO
+}
