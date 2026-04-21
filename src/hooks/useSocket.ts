@@ -10,6 +10,7 @@ import type {
   TypingStartEvent,
   TypingStopEvent,
   MessageReadEvent,
+  MessagePinnedEvent,
 } from '../types/chat'
 
 export function useSocket() {
@@ -61,6 +62,7 @@ export function useChatSubscription(chatId: number | null) {
   const removeReaction = useChatStore((s) => s.removeReaction)
   const markRead = useChatStore((s) => s.markRead)
   const setTyping = useChatStore((s) => s.setTyping)
+  const setPinned = useChatStore((s) => s.setPinned)
 
   useEffect(() => {
     if (!chatId) return
@@ -89,6 +91,11 @@ export function useChatSubscription(chatId: number | null) {
             case 'REACTION_REMOVED':
               removeReaction(event.payload.messageId, event.payload.userId, event.payload.emoji)
               break
+            case 'MESSAGE_PINNED': {
+              const pinEvent = event as MessagePinnedEvent
+              if (chatId) setPinned(pinEvent.payload.messageId, chatId, pinEvent.payload.isPinned)
+              break
+            }
           }
         })
 
@@ -115,7 +122,7 @@ export function useChatSubscription(chatId: number | null) {
       typingSub?.unsubscribe()
       readSub?.unsubscribe()
     }
-  }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping])
+  }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping, setPinned])
 }
 
 export function publishTypingStart(chatId: number, userId: number, userName: string): void {
