@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bubble-outgoing: #dcfce7;
+    --bubble-incoming: #ffffff;
+  }
+
+  .dark {
+    --bubble-outgoing: #166534;
+    --bubble-incoming: #1f2937;
+  }
+
+  html {
+    font-size: 16px; /* NORMAL */
+  }
+
+  html.font-small {
+    font-size: 14px;
+  }
+
+  html.font-large {
+    font-size: 18px;
+  }
+
+  body {
+    @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(156 163 175) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(156 163 175);
+    border-radius: 2px;
+  }
+}
