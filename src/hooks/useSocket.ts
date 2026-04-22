@@ -147,9 +147,9 @@ export function useChatSubscription(chatId: number | null) {
 }
 
 export function publishTypingStart(chatId: number, userId: number, userName: string): void {
-  publish('/app/chat.typing.start', { chatId, userId, userName })
+  publish('/app/chat.typing.start', { chatId, userId, userName }).catch(() => {})
 }
 
 export function publishTypingStop(chatId: number, userId: number): void {
-  publish('/app/chat.typing.stop', { chatId, userId })
+  publish('/app/chat.typing.stop', { chatId, userId }).catch(() => {})
 }

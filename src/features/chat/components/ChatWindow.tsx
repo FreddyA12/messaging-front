@@ -281,7 +281,7 @@ export function ChatWindow() {
         setUploadProgress(null)
       }
 
-      publish('/app/chat.send', {
+      await publish('/app/chat.send', {
         chatId: activeChatId,
         content: content || null,
         type: pendingAttach?.type ?? 'TEXT',

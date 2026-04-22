@@ -43,6 +43,7 @@ export function connectSocket(): Promise<void> {
 export function disconnectSocket(): void {
   stompClient?.deactivate()
   stompClient = null
+  connectingPromise = null
 }
 
 export function subscribe(destination: string, callback: (body: unknown) => void): StompSubscription | null {
@@ -57,11 +58,8 @@ export function subscribe(destination: string, callback: (body: unknown) => void
   })
 }
 
-export function publish(destination: string, body: unknown): void {
+export async function publish(destination: string, body: unknown): Promise<void> {
+  await connectSocket()
   const client = getStompClient()
-  if (!client.connected) {
-    console.warn('STOMP not connected, dropping message to', destination)
-    return
-  }
   client.publish({ destination, body: JSON.stringify(body) })
 }
