@@ -104,7 +104,9 @@ export function ChatWindow() {
 
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null
   const chatMessages = activeChatId ? (messages[activeChatId] ?? []) : []
-  const typingUsers = activeChatId ? (typing[activeChatId] ?? []) : []
+  const typingUsers = activeChatId
+    ? (typing[activeChatId] ?? []).filter((u) => u.userId !== currentUser?.id)
+    : []
   const otherPresence = activeChat?.otherUserId != null ? presence[activeChat.otherUserId] : null
   const activePinned = activeChatId ? (pinnedMessages[activeChatId] ?? []) : []
 
@@ -117,7 +119,12 @@ export function ChatWindow() {
       const data = await chatApi.getMessages(activeChatId, undefined, 50)
       setMessages(activeChatId, data as unknown as Message[])
       setHasMore(data.length === 50)
-      setCursor(data[0]?.createdAt)
+      setCursor(data[data.length - 1]?.createdAt)
+      // Mark all unread messages as read when opening the chat
+      const unread = (data as unknown as Message[]).filter(
+        (m) => m.senderId !== currentUser?.id && !m.readBy?.includes(currentUser?.id ?? 0)
+      )
+      unread.forEach((m) => chatApi.markRead(m.id).catch(() => {}))
       return data
     },
     enabled: !!activeChatId,
@@ -668,7 +675,7 @@ export function ChatWindow() {
                     Aún no hay mensajes. ¡Di hola!
                   </p>
                 ) : (
-                  [...chatMessages].reverse().map((msg) => (
+                  chatMessages.map((msg) => (
                     <MessageBubble
                       key={msg.id}
                       message={msg}

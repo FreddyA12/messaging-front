@@ -105,12 +105,12 @@ export const useChatStore = create<ChatState>((set) => ({
   addMessage: (message) =>
     set((s) => {
       const existing = s.messages[message.chatId] ?? []
-      return { messages: { ...s.messages, [message.chatId]: [...existing, message] } }
+      return { messages: { ...s.messages, [message.chatId]: [message, ...existing] } }
     }),
   prependMessages: (chatId, messages) =>
     set((s) => {
       const existing = s.messages[chatId] ?? []
-      return { messages: { ...s.messages, [chatId]: [...messages, ...existing] } }
+      return { messages: { ...s.messages, [chatId]: [...existing, ...messages] } }
     }),
   updateLastMessage: (chatId, content, at) =>
     set((s) => ({
