@@ -18,7 +18,7 @@ interface Props {
   localStream: MediaStream | null
   remoteStream: MediaStream | null
   onToggleMute: () => void
-  onToggleCamera: () => Promise<void>
+  onToggleCamera: () => void
   onSwitchCamera: () => Promise<void>
   onEscalate: () => Promise<void>
   onEnd: () => void

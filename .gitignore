@@ -20,3 +20,15 @@ dist-ssr/
 
 ### Logs ###
 *.log
+
+### Build cache ###
+.cache/
+.parcel-cache/
+coverage/
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### TypeScript ###
+*.tsbuildinfo

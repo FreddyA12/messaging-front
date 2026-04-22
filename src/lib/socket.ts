@@ -3,11 +3,12 @@ import SockJS from 'sockjs-client'
 import { useAuthStore } from '../store/authStore'
 
 let stompClient: Client | null = null
+let connectingPromise: Promise<void> | null = null
 
 export function getStompClient(): Client {
   if (!stompClient) {
     stompClient = new Client({
-      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/ws`),
+      webSocketFactory: () => new SockJS(`${window.location.origin}/ws`),
       connectHeaders: {
         Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ''}`,
       },
@@ -21,21 +22,28 @@ export function getStompClient(): Client {
 }
 
 export function connectSocket(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const client = getStompClient()
-    if (client.connected) {
+  const client = getStompClient()
+  if (client.connected) return Promise.resolve()
+  if (connectingPromise) return connectingPromise
+
+  connectingPromise = new Promise((resolve, reject) => {
+    client.onConnect = () => {
+      connectingPromise = null
       resolve()
-      return
     }
-    client.onConnect = () => resolve()
-    client.onStompError = (frame) => reject(new Error(frame.headers.message))
+    client.onStompError = (frame) => {
+      connectingPromise = null
+      reject(new Error(frame.headers.message))
+    }
     client.activate()
   })
+  return connectingPromise
 }
 
 export function disconnectSocket(): void {
   stompClient?.deactivate()
   stompClient = null
+  connectingPromise = null
 }
 
 export function subscribe(destination: string, callback: (body: unknown) => void): StompSubscription | null {
@@ -50,11 +58,8 @@ export function subscribe(destination: string, callback: (body: unknown) => void
   })
 }
 
-export function publish(destination: string, body: unknown): void {
+export async function publish(destination: string, body: unknown): Promise<void> {
+  await connectSocket()
   const client = getStompClient()
-  if (!client.connected) {
-    console.warn('STOMP not connected, dropping message to', destination)
-    return
-  }
   client.publish({ destination, body: JSON.stringify(body) })
 }

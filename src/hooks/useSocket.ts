@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { connectSocket, disconnectSocket, subscribe, publish } from '../lib/socket'
 import { useChatStore, type Message } from '../store/chatStore'
+import { useAuthStore } from '../store/authStore'
+import { chatApi } from '../features/chat/api'
 import type { StompSubscription } from '@stomp/stompjs'
 import type {
   ChatSocketEvent,
@@ -88,10 +90,16 @@ export function useChatSubscription(chatId: number | null) {
         mainSub = subscribe(`/topic/chat.${chatId}`, (body) => {
           const event = body as ChatSocketEvent
           switch (event.type) {
-            case 'MESSAGE_NEW':
-              addMessage(toMessage(event.payload))
+            case 'MESSAGE_NEW': {
+              const newMsg = toMessage(event.payload)
+              addMessage(newMsg)
               updateLastMessage(event.payload.chatId, event.payload.content, event.payload.createdAt)
+              // Auto-mark as read if the chat is active (message from someone else)
+              if (event.payload.senderId !== useAuthStore.getState().user?.id) {
+                chatApi.markRead(event.payload.id).catch(() => {})
+              }
               break
+            }
             case 'MESSAGE_EDITED':
               editMessage(event.payload.messageId, event.payload.newContent, event.payload.editedAt)
               break
@@ -139,9 +147,9 @@ export function useChatSubscription(chatId: number | null) {
 }
 
 export function publishTypingStart(chatId: number, userId: number, userName: string): void {
-  publish('/app/chat.typing.start', { chatId, userId, userName })
+  publish('/app/chat.typing.start', { chatId, userId, userName }).catch(() => {})
 }
 
 export function publishTypingStop(chatId: number, userId: number): void {
-  publish('/app/chat.typing.stop', { chatId, userId })
+  publish('/app/chat.typing.stop', { chatId, userId }).catch(() => {})
 }
