@@ -1,3 +1,43 @@
+## Documentos de referencia obligatoria
+
+Antes de tocar cualquier código, lee estos dos archivos:
+
+| Archivo | Para qué sirve |
+|---------|----------------|
+| [PLANNING.md](PLANNING.md) | Arquitectura completa, stack, modelo de datos, endpoints REST y WS, restricciones, plan por fases |
+| [WORKBOARD.md](WORKBOARD.md) | Estado actual de cada tarea — qué está hecho (`[x]`) y qué falta (`[ ]`) |
+
+**Regla de oro:** si algo no está claro, PLANNING.md es la fuente de verdad del diseño. WORKBOARD.md es la fuente de verdad del estado de avance.
+
+---
+
+## Arrancar el proyecto
+
+El frontend **requiere que el backend esté corriendo** en `http://localhost:8080`.
+
+```bash
+# 1. Arrancar el backend primero (en messaging-service/)
+docker-compose up -d
+# → levanta PostgreSQL + la app Spring Boot en http://localhost:8080
+
+# 2. Instalar dependencias del frontend (solo la primera vez)
+npm install
+
+# 3. Arrancar el frontend
+npm run dev
+# → http://localhost:5173
+```
+
+Credenciales de prueba (creadas por Liquibase en el backend):
+
+| Email | Contraseña |
+|-------|------------|
+| alice@chat.com | password |
+| bob@chat.com | password |
+| carol@chat.com | password |
+
+---
+
 ## Workboard
 
 - Cada vez que termines una tarea listada en `WORKBOARD.md`, edítalo y marca esa tarea como completada (cambia `[ ]` a `[x]`).

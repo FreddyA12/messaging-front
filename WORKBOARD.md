@@ -204,3 +204,20 @@ src/
 - [ ] Mostrar notificación cuando la pestaña no está activa + mensaje nuevo
 - [ ] Silenciar chat por tiempo (UI en menú del chat)
 - [ ] `PrivacySettings.tsx` — última vez, foto, ticks de lectura
+
+---
+
+## FASE 10 — Mensajes Temporales
+
+### 10.1
+**Estado:** `[ ]`
+- [ ] `src/types/chat.ts`: añadir `expiresAt?: string` a `MessageDTO`; añadir `ttlSeconds?: number` a `SendMessageRequest`
+- [ ] `src/features/chat/api.ts`: `setMessageTtl(messageId, ttlSeconds)` → `PATCH /api/messages/{id}/ttl`
+- [ ] `MessageBubble.tsx`:
+  - Mostrar contador regresivo visible si `expiresAt` está presente (`useEffect` con `setInterval` de 1s)
+  - Icono de reloj junto a la hora de envío
+  - Al llegar a 0 → eliminar la burbuja del store localmente (no esperar evento WS)
+- [ ] Menú contextual en `MessageBubble` (solo mensajes propios): opción "Activar autodestrucción" → abre selector de tiempo (30 s, 5 min, 1 h, 24 h, 7 d, personalizado)
+- [ ] `TtlPickerDialog.tsx` — modal con opciones de tiempo + input personalizado en segundos
+- [ ] Al enviar mensaje nuevo: añadir selector de TTL opcional en el área de input (icono reloj junto al botón enviar)
+- [ ] `chatStore.ts`: `scheduleLocalExpiry(messageId, expiresAt)` — si el tab está abierto, elimina el mensaje del estado local cuando llega la hora
