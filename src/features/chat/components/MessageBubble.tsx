@@ -6,6 +6,7 @@ import { VideoBubble } from './VideoBubble'
 import { AudioBubble } from './AudioBubble'
 import { DocumentBubble } from './DocumentBubble'
 import { LinkPreviewCard } from './LinkPreviewCard'
+import { CallMessageBubble } from './CallMessageBubble'
 
 interface MessageBubbleProps {
   message: Message
@@ -164,6 +165,16 @@ export function MessageBubble({
         <div className="max-w-[70%] px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-xs italic">
           Mensaje eliminado
         </div>
+      </div>
+    )
+  }
+
+  // Render call messages with special UI
+  if (message.type === 'SYSTEM' && message.content &&
+      (message.content.includes('Llamada de voz') || message.content.includes('Videollamada'))) {
+    return (
+      <div ref={wrapperRef}>
+        <CallMessageBubble message={message} currentUserId={currentUserId} />
       </div>
     )
   }
