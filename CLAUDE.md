@@ -15,7 +15,7 @@ Al terminar cada fase, actualiza la tabla de abajo con los archivos modificados,
 | 3 — Mensajería avanzada | ✅ | `types/chat.ts`, `store/chatStore.ts`, `hooks/useSocket.ts`, `features/chat/components/MessageBubble.tsx`, `ChatWindow.tsx`, `ReplyPreview.tsx`, `features/chat/api.ts` | Ver detalle abajo. |
 | 4 — Pin, Star, Forward, Search | ✅ | `types/chat.ts`, `store/chatStore.ts`, `hooks/useSocket.ts`, `features/chat/api.ts`, `MessageBubble.tsx`, `ChatWindow.tsx`, `PinnedMessageBanner.tsx`, `StarredMessagesView.tsx`, `ForwardDialog.tsx` | Ver detalle abajo. |
 | 5 — Multimedia | ✅ | `types/chat.ts`, `store/chatStore.ts`, `utils/imageCompression.ts`, `hooks/useAttachmentBlob.ts`, `features/media/api.ts`, `features/media/components/MediaGallery.tsx`, `MediaTab.tsx`, `DocumentsTab.tsx`, `LinksTab.tsx`, `AudiosTab.tsx`, `features/chat/components/ImageBubble.tsx`, `VideoBubble.tsx`, `AudioBubble.tsx`, `DocumentBubble.tsx`, `LinkPreviewCard.tsx`, `AttachMenu.tsx`, `AttachPreview.tsx`, `MessageBubble.tsx`, `ChatWindow.tsx` | Ver detalle abajo. |
-| 6 — Llamadas WebRTC | 🔲 | — | — |
+| 6 — Llamadas WebRTC | ✅ | `types/call.ts`, `store/callStore.ts`, `features/calls/api.ts`, `features/calls/hooks/useWebRTC.ts`, `features/calls/components/CallManager.tsx`, `IncomingCallOverlay.tsx`, `CallScreen.tsx`, `routes/MainLayout.tsx`, `features/chat/components/ChatWindow.tsx` | Ver detalle abajo. |
 | 7 — Grupos | 🔲 | — | — |
 | 8 — Personalización | 🔲 | — | — |
 | 9 — Privacidad y notificaciones | 🔲 | — | — |
@@ -252,6 +252,87 @@ Props nuevas: `onPin`, `onStar`, `onForward`, `onScrollToReply`, `setRef`, `isHi
 - `sendMessage` sube el archivo primero (`mediaApi.uploadFile`), luego envía mensaje con `attachmentIds`
 - Botón enviar habilitado también cuando hay `pendingAttach` aunque el input esté vacío (permite enviar sin caption)
 - Botón galería (grid icon) en header → abre `MediaGallery` como panel lateral derecho
+
+---
+
+## Fase 6 — Detalle de implementación
+
+### Nuevos tipos (`src/types/call.ts`)
+- `CallType` — `'VOICE' | 'VIDEO'`
+- `CallStatus` — `'RINGING' | 'ONGOING' | 'ENDED' | 'MISSED' | 'REJECTED'`
+- `CallEndReason` — `'HANGUP' | 'REJECTED' | 'MISSED' | 'ERROR' | 'BUSY'`
+- `CallDTO` — entrada de historial de llamadas
+- `CallSignalingEvent` — unión discriminada de eventos WS de señalización:
+  - `CALL_OFFER` — `{ callId, from, fromName, callType, sdp }`
+  - `CALL_ANSWER` — `{ callId, from, sdp }`
+  - `CALL_ICE_CANDIDATE` — `{ callId, from, candidate }`
+  - `CALL_ENDED` — `{ callId, reason }`
+  - `CALL_ESCALATE` — `{ callId, from, enableVideo }`
+
+### callStore (`src/store/callStore.ts`)
+Estado:
+- `call: ActiveCall | null` — llamada actual con `phase`, `type`, `isCaller`, `peerId/Name`, `startedAt`, `muted`, `cameraOff`
+- `pendingStart: PendingOutgoingCall | null` — solicitud para iniciar llamada (puente entre ChatWindow y CallManager)
+
+Fases: `IDLE`, `RINGING_OUT`, `RINGING_IN`, `CONNECTING`, `ACTIVE`, `ENDED`
+
+Acciones: `requestOutgoingCall`, `clearPendingStart`, `startOutgoing`, `startIncoming`, `setPhase`, `setActive`, `setType`, `setMuted`, `setCameraOff`, `endCall`
+
+### useWebRTC (`src/features/calls/hooks/useWebRTC.ts`)
+Encapsula todo el ciclo de vida WebRTC:
+- `startCall(peerId, peerName, type, chatId?)` — POST `/api/calls/initiate` → getUserMedia → crear `RTCPeerConnection` con STUN de Google → addTracks → createOffer → setLocalDescription → publish `/app/call.offer`
+- `acceptCall()` — POST `/api/calls/{id}/accept` → getUserMedia → crear PC → setRemoteDescription(offer) → createAnswer → setLocalDescription → publish `/app/call.answer`
+- `onOffer/onAnswer/onIceCandidate/onRemoteEnd` — handlers llamados por `CallManager` al recibir señalización
+- `rejectCall`, `endCall(notifyPeer)` — POST a REST + publish a `/app/call.end`
+- `toggleMute` / `toggleCamera` — habilita/deshabilita tracks locales
+- `switchCamera` — intercambia facingMode user/environment vía `replaceTrack`
+- `escalateToVideo` — pide video con `getUserMedia`, lo añade al PC, reoferta y publica `/app/call.escalate`
+- Buffer de ICE candidates: si llegan antes del remoteDescription, se almacenan y se drenan después
+- Trickle ICE: cada `onicecandidate` se publica en `/app/call.ice` con `{ callId, to, candidate }`
+
+### CallManager (`src/features/calls/components/CallManager.tsx`)
+- Montado en `MainLayout` una sola vez; posee la única instancia de `useWebRTC`
+- Suscribe `/user/queue/calls` y dispatcha a los handlers de useWebRTC según `event.type`
+- Observa `pendingStart` del store para iniciar llamadas salientes (ChatWindow sólo dispara `requestOutgoingCall`)
+- Renderiza `IncomingCallOverlay` cuando `phase === 'RINGING_IN'`, o `CallScreen` en cualquier otra fase activa
+
+### IncomingCallOverlay (`src/features/calls/components/IncomingCallOverlay.tsx`)
+- Overlay full-screen con avatar con pulse animado, nombre, tipo de llamada
+- Dos botones: rechazar (rojo) / aceptar (verde); icono cambia según voz/video
+
+### CallScreen (`src/features/calls/components/CallScreen.tsx`)
+- Full-screen overlay; muestra video remoto o avatar (voz) + video local en PIP (esquina inferior derecha)
+- Audio element dedicado para voz (srcObject = remoteStream) — en video el `<video>` ya lleva el audio
+- Status dinámico: "Llamando…" / "Conectando…" / `MM:SS` transcurrido (se arranca al pasar a `ACTIVE`)
+- Controles: Silenciar, Cámara on/off (video), Voltear cámara (video), Picture-in-Picture (`video.requestPictureInPicture()`), Escalar a video (voz), Colgar
+
+### Integración en ChatWindow (`src/features/chat/components/ChatWindow.tsx`)
+- Botones de llamada de voz y video en el header (solo chats privados sin llamada en curso)
+- Click → `useCallStore.requestOutgoingCall({ peerId, peerName, type, chatId })`
+
+### Endpoints / eventos usados
+REST:
+- `POST /api/calls/initiate` → `{ callId }`
+- `POST /api/calls/{id}/accept`
+- `POST /api/calls/{id}/reject`
+- `POST /api/calls/{id}/end`
+- `GET  /api/calls/history`
+
+WS cliente → servidor:
+- `/app/call.offer` `{ callId, to, callType, sdp }`
+- `/app/call.answer` `{ callId, to, sdp }`
+- `/app/call.ice` `{ callId, to, candidate }`
+- `/app/call.end` `{ callId, to }`
+- `/app/call.escalate` `{ callId, to, enableVideo }`
+
+WS servidor → cliente (en `/user/queue/calls`):
+- `CALL_OFFER`, `CALL_ANSWER`, `CALL_ICE_CANDIDATE`, `CALL_ENDED`, `CALL_ESCALATE`
+
+### Pendiente de backend para fase 6
+- Implementar `CallSignalingController` que reenvía offer/answer/ice/end entre peers por `/user/queue/calls`
+- `CallController` con los endpoints REST anteriores
+- Persistir llamada y emitir mensaje de sistema en el chat para llamadas perdidas
+- `ChatDTO.otherUserId` (ya documentado en fase 3) — necesario para habilitar los botones de llamada
 
 ---
 

@@ -165,11 +165,11 @@ src/
 ## FASE 6 — Llamadas WebRTC
 
 ### 6.1
-**Estado:** `[ ]`
-- [ ] Completar `useWebRTC.ts` (RTCPeerConnection, getUserMedia, ICE)
-- [ ] Pantalla de llamada entrante (overlay con aceptar/rechazar)
-- [ ] Pantalla de llamada activa (mute, cámara, PIP, colgar)
-- [ ] Escalado de voz a video en vivo
+**Estado:** `[x]`
+- [x] Completar `useWebRTC.ts` (RTCPeerConnection, getUserMedia, ICE)
+- [x] Pantalla de llamada entrante (overlay con aceptar/rechazar)
+- [x] Pantalla de llamada activa (mute, cámara, PIP, colgar)
+- [x] Escalado de voz a video en vivo
 
 ---
 
