@@ -15,7 +15,7 @@ const AVATAR_COLORS = [
 ]
 const avatarColor = (name: string) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 
-export function ForwardDialog({ message, chats, onConfirm, onClose }: ForwardDialogProps) {
+export function ForwardDialog({ chats, onConfirm, onClose }: ForwardDialogProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [search, setSearch] = useState('')
 

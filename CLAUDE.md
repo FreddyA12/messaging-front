@@ -336,6 +336,18 @@ WS servidor → cliente (en `/user/queue/calls`):
 
 ---
 
+## Credenciales de Prueba
+
+Para testing y desarrollo, están disponibles los siguientes usuarios:
+
+| Email | Contraseña |
+|-------|------------|
+| alice@chat.com | password |
+| bob@chat.com | password |
+| carol@chat.com | password |
+
+**Nota**: Estos usuarios se crean automáticamente mediante Liquibase en modo desarrollo (contexto "dev"). Ver `messaging-service/src/main/resources/db/changelog/db.changelog-master.xml` changeset `seed-dev-users`.
+
 ## Instrucción para Claude
 
 - No ejecutes comandos de build, compilación, tests ni servidores de desarrollo (`tsc`, `npm run build`, `npm run dev`, `npm test`, etc.) a menos que el usuario lo indique explícitamente.
