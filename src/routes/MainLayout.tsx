@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useSocket } from '../hooks/useSocket'
 import { ChatList } from '../features/chat/components/ChatList'
 import { ChatWindow } from '../features/chat/components/ChatWindow'
+import { CallManager } from '../features/calls/components/CallManager'
 
 export function MainLayout() {
   const user = useAuthStore((s) => s.user)
@@ -48,6 +49,8 @@ export function MainLayout() {
       <main className="flex-1 flex overflow-hidden">
         <ChatWindow />
       </main>
+
+      <CallManager />
     </div>
   )
 }
