@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { connectSocket, disconnectSocket, subscribe, publish } from '../lib/socket'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, type Message } from '../store/chatStore'
 import type { StompSubscription } from '@stomp/stompjs'
 import type {
   ChatSocketEvent,
@@ -11,7 +11,20 @@ import type {
   TypingStopEvent,
   MessageReadEvent,
   MessagePinnedEvent,
+  MessageDTO,
 } from '../types/chat'
+
+// Convert MessageDTO to Message with proper defaults
+function toMessage(dto: MessageDTO): Message {
+  return {
+    ...dto,
+    isPinned: dto.isPinned ?? false,
+    isStarred: dto.isStarred ?? false,
+    attachments: dto.attachments ?? [],
+    linkPreviews: dto.linkPreviews ?? [],
+    replyTo: dto.replyTo ? toMessage(dto.replyTo) : null,
+  }
+}
 
 export function useSocket() {
   const connected = useRef(false)
@@ -76,7 +89,7 @@ export function useChatSubscription(chatId: number | null) {
           const event = body as ChatSocketEvent
           switch (event.type) {
             case 'MESSAGE_NEW':
-              addMessage(event.payload)
+              addMessage(toMessage(event.payload))
               updateLastMessage(event.payload.chatId, event.payload.content, event.payload.createdAt)
               break
             case 'MESSAGE_EDITED':

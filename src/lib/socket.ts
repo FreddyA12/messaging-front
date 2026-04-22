@@ -8,9 +8,9 @@ export function getStompClient(): Client {
   if (!stompClient) {
     stompClient = new Client({
       webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/ws`),
-      connectHeaders: () => ({
+      connectHeaders: {
         Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ''}`,
-      }),
+      },
       reconnectDelay: 3000,
       onStompError: (frame: IFrame) => {
         console.error('STOMP error', frame)
