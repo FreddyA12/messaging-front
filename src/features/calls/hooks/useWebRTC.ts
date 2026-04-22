@@ -15,15 +15,10 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
 
-interface MediaConstraintsOptions {
-  audio: boolean
-  video: boolean
-}
-
-async function getUserMedia(opts: MediaConstraintsOptions): Promise<MediaStream> {
+async function getUserMedia(audio: boolean, video: boolean): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
-    audio: opts.audio,
-    video: opts.video
+    audio,
+    video: video
       ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
       : false,
   })
@@ -37,7 +32,7 @@ export interface UseWebRTCResult {
   rejectCall: () => Promise<void>
   endCall: (notifyPeer?: boolean) => Promise<void>
   toggleMute: () => void
-  toggleCamera: () => Promise<void>
+  toggleCamera: () => void
   switchCamera: () => Promise<void>
   escalateToVideo: () => Promise<void>
   onOffer: (event: CallOfferEvent) => void
@@ -81,23 +76,32 @@ export function useWebRTC(): UseWebRTCResult {
     setRemoteStream(null)
   }, [stopLocalTracks])
 
+  const drainPendingCandidates = useCallback(async () => {
+    const pc = pcRef.current
+    if (!pc?.remoteDescription) return
+    const pending = [...pendingCandidatesRef.current]
+    pendingCandidatesRef.current = []
+    for (const c of pending) {
+      try { await pc.addIceCandidate(c) } catch { /* candidate may be stale */ }
+    }
+  }, [])
+
   const createPeerConnection = useCallback(
     (callId: number, peerId: number): RTCPeerConnection => {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) {
           publish('/app/call.ice', {
             callId,
             to: peerId,
-            candidate: event.candidate.toJSON(),
-          })
+            candidate: candidate.toJSON(),
+          }).catch(() => {})
         }
       }
 
-      pc.ontrack = (event) => {
-        const [stream] = event.streams
-        setRemoteStream(stream ?? null)
+      pc.ontrack = ({ streams }) => {
+        setRemoteStream(streams[0] ?? null)
       }
 
       pc.onconnectionstatechange = () => {
@@ -117,91 +121,75 @@ export function useWebRTC(): UseWebRTCResult {
     [setActive, setPhase],
   )
 
-  const drainPendingCandidates = useCallback(async () => {
-    if (!pcRef.current || !pcRef.current.remoteDescription) return
-    const pending = pendingCandidatesRef.current
-    pendingCandidatesRef.current = []
-    for (const c of pending) {
-      try {
-        await pcRef.current.addIceCandidate(c)
-      } catch (err) {
-        console.warn('Failed to add buffered ICE candidate', err)
-      }
-    }
-  }, [])
-
   const startCall = useCallback<UseWebRTCResult['startCall']>(
     async (peerId, peerName, type, chatId) => {
       if (!currentUser) return
-      const { callId } = await callApi.initiate({
-        calleeId: peerId,
-        chatId,
-        type,
-      })
-      startOutgoing({ callId, type, peerId, peerName })
+      try {
+        const { callId } = await callApi.initiate({ calleeId: peerId, chatId, type })
+        startOutgoing({ callId, type, peerId, peerName })
 
-      const stream = await getUserMedia({ audio: true, video: type === 'VIDEO' })
-      setLocalStream(stream)
+        const stream = await getUserMedia(true, type === 'VIDEO')
+        setLocalStream(stream)
 
-      const pc = createPeerConnection(callId, peerId)
-      pcRef.current = pc
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+        const pc = createPeerConnection(callId, peerId)
+        pcRef.current = pc
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream))
 
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: type === 'VIDEO',
-      })
-      await pc.setLocalDescription(offer)
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: type === 'VIDEO',
+        })
+        await pc.setLocalDescription(offer)
 
-      publish('/app/call.offer', {
-        callId,
-        to: peerId,
-        callType: type,
-        sdp: offer,
-      })
+        // await so the offer is guaranteed to arrive before ICE candidates
+        await publish('/app/call.offer', { callId, to: peerId, callType: type, sdp: offer })
+      } catch (err) {
+        console.error('startCall failed:', err)
+        cleanup()
+        endCallInStore()
+        throw err
+      }
     },
-    [createPeerConnection, currentUser, startOutgoing],
+    [createPeerConnection, currentUser, startOutgoing, cleanup, endCallInStore],
   )
 
   const onOffer = useCallback<UseWebRTCResult['onOffer']>(
-    (event) => {
-      pendingOfferRef.current = event.payload.sdp
-    },
+    (event) => { pendingOfferRef.current = event.payload.sdp },
     [],
   )
 
   const acceptCall = useCallback<UseWebRTCResult['acceptCall']>(async () => {
     if (!call || !pendingOfferRef.current) return
-    setPhase('CONNECTING')
-    await callApi.accept(call.callId)
+    try {
+      setPhase('CONNECTING')
+      await callApi.accept(call.callId)
 
-    const stream = await getUserMedia({ audio: true, video: call.type === 'VIDEO' })
-    setLocalStream(stream)
+      const stream = await getUserMedia(true, call.type === 'VIDEO')
+      setLocalStream(stream)
 
-    const pc = createPeerConnection(call.callId, call.peerId)
-    pcRef.current = pc
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      const pc = createPeerConnection(call.callId, call.peerId)
+      pcRef.current = pc
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
 
-    await pc.setRemoteDescription(pendingOfferRef.current)
-    pendingOfferRef.current = null
+      await pc.setRemoteDescription(pendingOfferRef.current)
+      pendingOfferRef.current = null
 
-    const answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
 
-    publish('/app/call.answer', {
-      callId: call.callId,
-      to: call.peerId,
-      sdp: answer,
-    })
+      await publish('/app/call.answer', { callId: call.callId, to: call.peerId, sdp: answer })
 
-    await drainPendingCandidates()
-  }, [call, createPeerConnection, drainPendingCandidates, setPhase])
+      await drainPendingCandidates()
+    } catch (err) {
+      console.error('acceptCall failed:', err)
+      cleanup()
+      endCallInStore()
+    }
+  }, [call, createPeerConnection, drainPendingCandidates, setPhase, cleanup, endCallInStore])
 
   const rejectCall = useCallback<UseWebRTCResult['rejectCall']>(async () => {
     if (!call) return
-    try {
-      await callApi.reject(call.callId)
-    } finally {
+    try { await callApi.reject(call.callId) } finally {
       cleanup()
       endCallInStore()
     }
@@ -209,19 +197,12 @@ export function useWebRTC(): UseWebRTCResult {
 
   const endCall = useCallback<UseWebRTCResult['endCall']>(
     async (notifyPeer = true) => {
-      if (!call) {
-        cleanup()
-        endCallInStore()
-        return
-      }
-      try {
-        if (notifyPeer) {
-          await callApi.end(call.callId)
-          publish('/app/call.end', { callId: call.callId, to: call.peerId })
-        }
-      } finally {
-        cleanup()
-        endCallInStore()
+      const currentCall = call
+      cleanup()
+      endCallInStore()
+      if (notifyPeer && currentCall) {
+        try { await callApi.end(currentCall.callId) } catch { /* already ended */ }
+        publish('/app/call.end', { callId: currentCall.callId, to: currentCall.peerId }).catch(() => {})
       }
     },
     [call, cleanup, endCallInStore],
@@ -232,8 +213,12 @@ export function useWebRTC(): UseWebRTCResult {
       const pc = pcRef.current
       if (!pc) return
       setPhase('CONNECTING')
-      await pc.setRemoteDescription(event.payload.sdp)
-      await drainPendingCandidates()
+      try {
+        await pc.setRemoteDescription(event.payload.sdp)
+        await drainPendingCandidates()
+      } catch (err) {
+        console.error('onAnswer failed:', err)
+      }
     },
     [drainPendingCandidates, setPhase],
   )
@@ -241,15 +226,11 @@ export function useWebRTC(): UseWebRTCResult {
   const onIceCandidate = useCallback<UseWebRTCResult['onIceCandidate']>(
     async (event) => {
       const pc = pcRef.current
-      if (!pc || !pc.remoteDescription) {
+      if (!pc?.remoteDescription) {
         pendingCandidatesRef.current.push(event.payload.candidate)
         return
       }
-      try {
-        await pc.addIceCandidate(event.payload.candidate)
-      } catch (err) {
-        console.warn('Failed to add ICE candidate', err)
-      }
+      try { await pc.addIceCandidate(event.payload.candidate) } catch { /* may be stale */ }
     },
     [],
   )
@@ -266,7 +247,7 @@ export function useWebRTC(): UseWebRTCResult {
     setMuted(next)
   }, [call, localStream, setMuted])
 
-  const toggleCamera = useCallback(async () => {
+  const toggleCamera = useCallback(() => {
     if (!localStream || !call) return
     const next = !call.cameraOff
     localStream.getVideoTracks().forEach((t) => { t.enabled = !next })
@@ -275,23 +256,19 @@ export function useWebRTC(): UseWebRTCResult {
 
   const switchCamera = useCallback(async () => {
     if (!localStream || !pcRef.current) return
-    const nextFacing: 'user' | 'environment' =
-      facingModeRef.current === 'user' ? 'environment' : 'user'
+    const next: 'user' | 'environment' = facingModeRef.current === 'user' ? 'environment' : 'user'
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: nextFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 } },
       })
       const newTrack = newStream.getVideoTracks()[0]
       if (!newTrack) return
       const sender = pcRef.current.getSenders().find((s) => s.track?.kind === 'video')
       if (sender) await sender.replaceTrack(newTrack)
-      localStream.getVideoTracks().forEach((t) => {
-        localStream.removeTrack(t)
-        t.stop()
-      })
+      localStream.getVideoTracks().forEach((t) => { localStream.removeTrack(t); t.stop() })
       localStream.addTrack(newTrack)
-      facingModeRef.current = nextFacing
+      facingModeRef.current = next
       setLocalStream(new MediaStream(localStream.getTracks()))
     } catch (err) {
       console.warn('switchCamera failed', err)
@@ -313,31 +290,16 @@ export function useWebRTC(): UseWebRTCResult {
       const offer = await pcRef.current.createOffer()
       await pcRef.current.setLocalDescription(offer)
 
-      publish('/app/call.offer', {
-        callId: call.callId,
-        to: call.peerId,
-        callType: 'VIDEO',
-        sdp: offer,
-      })
-      publish('/app/call.escalate', {
-        callId: call.callId,
-        to: call.peerId,
-        enableVideo: true,
-      })
+      publish('/app/call.offer', { callId: call.callId, to: call.peerId, callType: 'VIDEO', sdp: offer }).catch(() => {})
+      publish('/app/call.escalate', { callId: call.callId, to: call.peerId, enableVideo: true }).catch(() => {})
       setType('VIDEO')
-      if (localStream) {
-        setLocalStream(new MediaStream(localStream.getTracks()))
-      }
+      if (localStream) setLocalStream(new MediaStream(localStream.getTracks()))
     } catch (err) {
       console.warn('escalateToVideo failed', err)
     }
   }, [call, localStream, setType])
 
-  useEffect(() => {
-    return () => {
-      cleanup()
-    }
-  }, [cleanup])
+  useEffect(() => () => { cleanup() }, [cleanup])
 
   return {
     localStream,
