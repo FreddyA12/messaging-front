@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useChatStore } from '../../../store/chatStore'
 import type { Message } from '../../../store/chatStore'
+import { useAppearanceStore, CHAT_BACKGROUNDS } from '../../../store/appearanceStore'
 import { useAuthStore } from '../../../store/authStore'
 import { useChatSubscription, publishTypingStart, publishTypingStop } from '../../../hooks/useSocket'
 import { publish } from '../../../lib/socket'
@@ -92,6 +93,7 @@ export function ChatWindow() {
     previewUrl: string | null
   } | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const chatBg = useAppearanceStore((s) => s.chatBackground)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -124,7 +126,7 @@ export function ChatWindow() {
       const unread = (data as unknown as Message[]).filter(
         (m) => m.senderId !== currentUser?.id && !m.readBy?.includes(currentUser?.id ?? 0)
       )
-      unread.forEach((m) => chatApi.markRead(m.id).catch(() => {}))
+      unread.forEach((m) => chatApi.markRead(m.id).catch(() => { }))
       return data
     },
     enabled: !!activeChatId,
@@ -134,7 +136,7 @@ export function ChatWindow() {
     if (!activeChatId) return
     chatApi.getPinnedMessages(activeChatId)
       .then((data) => setPinnedMessages(activeChatId, data as unknown as Message[]))
-      .catch(() => {})
+      .catch(() => { })
   }, [activeChatId, setPinnedMessages])
 
   useEffect(() => {
@@ -151,7 +153,7 @@ export function ChatWindow() {
       cancelAttach()
       inputRef.current?.focus()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId, setReplyTo, setEditingMessage])
 
   useEffect(() => {
@@ -453,25 +455,39 @@ export function ChatWindow() {
 
   if (!activeChat) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 dark:text-gray-500">
-        <svg className="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
-            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-        <p className="text-sm">Selecciona un chat para comenzar</p>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: '14px', background: 'linear-gradient(155deg, #f0f3e6 0%, #f5f6f0 100%)',
+      }}>
+        <div style={{
+          width: '72px', height: '72px', borderRadius: '22px',
+          background: 'rgba(122,144,72,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="32" height="32" fill="none" stroke="#7a9048" strokeWidth="1.2" viewBox="0 0 24 24" opacity="0.5">
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </div>
+        <p style={{ fontSize: '13px', color: '#8a9a7a', fontWeight: 500 }}>Selecciona un chat para comenzar</p>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex h-full overflow-hidden">
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
         {showSearch ? (
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 shrink-0">
-            <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div style={{
+            padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+            background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid rgba(122,144,72,0.14)',
+          }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9aaa82' }}
+                width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -482,30 +498,48 @@ export function ChatWindow() {
                 value={searchQuery}
                 onChange={handleSearchChange}
                 onKeyDown={(e) => e.key === 'Escape' && closeSearch()}
-                className="w-full pl-10 pr-4 py-2 text-sm rounded-xl
-                           bg-gray-100 dark:bg-gray-800
-                           text-gray-900 dark:text-gray-100 placeholder-gray-400
-                           focus:outline-none focus:ring-2 focus:ring-primary-500"
+                style={{
+                  width: '100%', paddingLeft: '38px', paddingRight: '16px',
+                  paddingTop: '8px', paddingBottom: '8px',
+                  fontSize: '13px', borderRadius: '12px',
+                  background: '#f0f3e6', border: '1.5px solid rgba(122,144,72,0.2)',
+                  color: '#242d16', outline: 'none',
+                  fontFamily: "'Poppins', system-ui, sans-serif",
+                }}
               />
             </div>
             <button
               onClick={closeSearch}
-              className="shrink-0 text-sm text-primary-500 hover:text-primary-700 font-medium transition-colors"
+              style={{
+                flexShrink: 0, fontSize: '12px', fontWeight: 600,
+                color: '#7a9048', background: 'none', border: 'none',
+                cursor: 'pointer', fontFamily: "'Poppins', system-ui, sans-serif",
+              }}
             >
               Cancelar
             </button>
           </div>
         ) : (
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 shrink-0">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center
-                             text-white font-semibold text-base shrink-0 ${avatarColor(activeChat.name)}`}>
+          <div style={{
+            padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0,
+            background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid rgba(122,144,72,0.14)',
+          }}>
+            {/* Avatar */}
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #7a9048, #91a662)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 600, fontSize: '15px', flexShrink: 0,
+              boxShadow: '0 2px 10px rgba(122,144,72,0.22)',
+            }}>
               {activeChat.name[0].toUpperCase()}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontWeight: 600, fontSize: '14px', color: '#242d16', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {activeChat.name}
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500">
+              <p style={{ fontSize: '11px', color: '#8a9a7a' }}>
                 {activeChat.type === 'GROUP'
                   ? 'Grupo'
                   : otherPresence?.isOnline
@@ -515,13 +549,13 @@ export function ChatWindow() {
                       : 'en línea'}
               </p>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
               {canCall && (
                 <>
                   <button
                     onClick={() => startCall('VOICE')}
                     className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400
-                               hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                               hover:text-primary-500 hover:bg-primary-50 transition-colors"
                     title="Llamada de voz"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -531,7 +565,7 @@ export function ChatWindow() {
                   <button
                     onClick={() => startCall('VIDEO')}
                     className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400
-                               hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                               hover:text-primary-500 hover:bg-primary-50 transition-colors"
                     title="Videollamada"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -544,8 +578,7 @@ export function ChatWindow() {
               <button
                 onClick={() => setShowSearch(true)}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400
-                           hover:text-gray-600 dark:hover:text-gray-200
-                           hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                           hover:text-primary-600 hover:bg-primary-50 transition-colors"
                 title="Buscar en el chat"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -557,8 +590,8 @@ export function ChatWindow() {
                 onClick={showStarred ? () => setShowStarred(false) : openStarredPanel}
                 className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors
                   ${showStarred
-                    ? 'text-amber-400 bg-amber-50 dark:bg-amber-900/20'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'text-primary-500 bg-primary-50'
+                    : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50'
                   }`}
                 title="Mensajes destacados"
               >
@@ -570,8 +603,8 @@ export function ChatWindow() {
                 onClick={() => { setShowGallery((v) => !v); setShowStarred(false) }}
                 className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors
                   ${showGallery
-                    ? 'text-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'text-primary-500 bg-primary-50'
+                    : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50'
                   }`}
                 title="Galería"
               >
@@ -635,7 +668,8 @@ export function ChatWindow() {
 
         {/* Messages */}
         {!showSearch && (
-          <div className="flex-1 overflow-y-auto flex flex-col-reverse px-4 py-3 gap-1 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto flex flex-col-reverse px-4 py-3 gap-1 scrollbar-thin"
+            style={{ background: CHAT_BACKGROUNDS[chatBg]?.style ?? CHAT_BACKGROUNDS.default.style }}>
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <svg className="w-6 h-6 text-primary-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -741,13 +775,16 @@ export function ChatWindow() {
 
         {/* Input */}
         {!showSearch && (
-          <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-end gap-2 shrink-0">
-            <div ref={attachBtnRef} className="relative shrink-0">
+          <div style={{
+            padding: '10px 16px 12px', borderTop: '1px solid rgba(122,144,72,0.14)',
+            display: 'flex', alignItems: 'flex-end', gap: '8px', flexShrink: 0,
+            background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)',
+          }}>
+            <div ref={attachBtnRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 onClick={() => setShowAttachMenu((v) => !v)}
                 className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400
-                           hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800
-                           transition-colors"
+                           hover:text-primary-500 hover:bg-primary-50 transition-colors"
                 title="Adjuntar archivo"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -770,18 +807,30 @@ export function ChatWindow() {
               onInput={handleInput}
               placeholder="Escribe un mensaje..."
               rows={1}
-              className="flex-1 resize-none rounded-2xl px-4 py-2.5 text-sm
-                         bg-gray-100 dark:bg-gray-800
-                         text-gray-900 dark:text-gray-100 placeholder-gray-400
-                         focus:outline-none focus:ring-2 focus:ring-primary-500
-                         max-h-32 overflow-y-auto scrollbar-thin transition"
+              style={{
+                flex: 1, resize: 'none', borderRadius: '18px',
+                padding: '10px 16px', fontSize: '13px',
+                background: '#f0f3e6', border: '1.5px solid rgba(122,144,72,0.2)',
+                color: '#242d16', outline: 'none',
+                maxHeight: '128px', overflowY: 'auto',
+                fontFamily: "'Poppins', system-ui, sans-serif",
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(122,144,72,0.5)' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(122,144,72,0.2)' }}
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() && !pendingAttach}
-              className="w-10 h-10 rounded-full bg-primary-500 hover:bg-primary-600
-                         disabled:opacity-40 disabled:cursor-not-allowed
-                         flex items-center justify-center text-white transition-colors shrink-0"
+              style={{
+                width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg, #7a9048, #637839)',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', transition: 'all 0.2s ease',
+                boxShadow: '0 3px 12px rgba(122,144,72,0.3)',
+                opacity: (!input.trim() && !pendingAttach) ? 0.4 : 1,
+              }}
               title={editingMessage ? 'Guardar cambios' : 'Enviar'}
             >
               {editingMessage ? (

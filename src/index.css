@@ -1,47 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --bubble-outgoing: #dcfce7;
+    /* Olive green bubbles */
+    --bubble-outgoing: #dde8c8;
     --bubble-incoming: #ffffff;
+
+    /* Brand palette */
+    --color-primary:      #7a9048;
+    --color-primary-dark: #637839;
+    --color-primary-light:#aebe8a;
+    --color-surface:      #f5f6f0;
+    --color-muted:        #eef0e6;
+    --color-border:       rgba(122, 144, 72, 0.18);
+    --color-text:         #242d16;
+    --color-text-muted:   #7a8a6a;
   }
 
   .dark {
-    --bubble-outgoing: #166534;
-    --bubble-incoming: #1f2937;
+    --bubble-outgoing: #3d5225;
+    --bubble-incoming: #232b1a;
+
+    --color-surface:    #1a1f12;
+    --color-muted:      #222a16;
+    --color-border:     rgba(122, 144, 72, 0.15);
+    --color-text:       #e8ecdc;
+    --color-text-muted: #8a9a7a;
   }
 
   html {
-    font-size: 16px; /* NORMAL */
+    font-size: 16px;
+    font-family: 'Poppins', system-ui, sans-serif;
   }
 
-  html.font-small {
-    font-size: 14px;
-  }
-
-  html.font-large {
-    font-size: 18px;
-  }
+  html.font-small { font-size: 14px; }
+  html.font-large  { font-size: 18px; }
 
   body {
-    @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    @apply bg-surface-base dark:bg-gray-950 text-gray-900 dark:text-gray-100;
+    font-family: 'Poppins', system-ui, sans-serif;
   }
 }
 
 @layer utilities {
+  /* ── Scrollbar ─────────────────────────── */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgb(156 163 175) transparent;
+    scrollbar-color: rgba(122, 144, 72, 0.3) transparent;
   }
-
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
-  }
-
+  .scrollbar-thin::-webkit-scrollbar       { width: 4px; }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(156 163 175);
+    background-color: rgba(122, 144, 72, 0.3);
     border-radius: 2px;
   }
+
+  /* ── Glassmorphism card ─────────────────── */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.68);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+  }
+  .dark .glass-card {
+    background: rgba(26, 31, 18, 0.72);
+    border-color: rgba(122, 144, 72, 0.12);
+  }
+
+  /* ── Brand gradient ─────────────────────── */
+  .brand-gradient {
+    background: linear-gradient(135deg, #7a9048, #637839);
+  }
+}
+
+/* ── Keyframes ──────────────────────────── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes spin        { to { transform: rotate(360deg); } }
+
+@keyframes floatBubble {
+  0%   { transform: translateY(0)    scale(1);    }
+  100% { transform: translateY(-14px) scale(1.04); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0    rgba(122, 144, 72, 0.22); }
+  50%       { box-shadow: 0 0 0 12px rgba(122, 144, 72, 0);   }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
 }
