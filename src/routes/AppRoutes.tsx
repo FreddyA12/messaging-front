@@ -3,6 +3,7 @@ import { AuthGuard } from './AuthGuard'
 import LoginPage from '../features/auth/LoginPage'
 import RegisterPage from '../features/auth/RegisterPage'
 import { MainLayout } from './MainLayout'
+import { SettingsPage } from '../features/settings/SettingsPage'
 
 export function AppRoutes() {
   return (
@@ -13,6 +14,7 @@ export function AppRoutes() {
 
         <Route element={<AuthGuard />}>
           <Route path="/" element={<MainLayout />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

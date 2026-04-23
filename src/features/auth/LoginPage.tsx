@@ -50,12 +50,12 @@ const ChatBubbleDecor = ({ text, x, y, delay, align }: { text: string; x: string
     padding: '12px 18px',
     borderRadius: align === 'right' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
     background: align === 'right'
-      ? 'linear-gradient(135deg, rgba(212, 166, 154, 0.35), rgba(201, 145, 138, 0.25))'
-      : 'rgba(255, 255, 255, 0.5)',
+      ? 'linear-gradient(135deg, rgba(122, 144, 72, 0.25), rgba(99, 120, 57, 0.18))'
+      : 'rgba(255, 255, 255, 0.55)',
     backdropFilter: 'blur(10px)',
     border: '1px solid rgba(255, 255, 255, 0.4)',
     fontSize: '13px',
-    color: align === 'right' ? '#8b6b62' : '#9a8a82',
+    color: align === 'right' ? '#4e602c' : '#7a8a6a',
     fontWeight: 500,
     animation: `floatBubble 7s ease-in-out ${delay}s infinite alternate`,
     boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
@@ -88,12 +88,12 @@ export default function LoginPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-          font-family: 'Inter', -apple-system, sans-serif;
+          font-family: 'Poppins', system-ui, sans-serif;
           overflow: hidden;
         }
 
@@ -120,23 +120,23 @@ export default function LoginPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
 
         @keyframes pulseGlow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(196, 148, 139, 0.2); }
-          50% { box-shadow: 0 0 0 12px rgba(196, 148, 139, 0); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(122, 144, 72, 0.2); }
+          50% { box-shadow: 0 0 0 12px rgba(122, 144, 72, 0); }
         }
 
         .login-input {
-          font-family: 'Inter', sans-serif;
+          font-family: 'Poppins', sans-serif;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .login-input:focus {
-          border-color: #c4948b !important;
-          box-shadow: 0 0 0 4px rgba(196, 148, 139, 0.12), 0 1px 3px rgba(0,0,0,0.04) !important;
+          border-color: #7a9048 !important;
+          box-shadow: 0 0 0 4px rgba(122, 144, 72, 0.12), 0 1px 3px rgba(0,0,0,0.04) !important;
           outline: none;
           background: #ffffff !important;
         }
         .login-input::placeholder {
-          color: #c4b5ad;
-          font-family: 'Inter', sans-serif;
+          color: #9aaa82;
+          font-family: 'Poppins', sans-serif;
           font-weight: 400;
         }
         .login-input:-webkit-autofill {
@@ -145,7 +145,7 @@ export default function LoginPage() {
         }
 
         .login-btn {
-          font-family: 'Inter', sans-serif;
+          font-family: 'Poppins', sans-serif;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
@@ -160,7 +160,7 @@ export default function LoginPage() {
         }
         .login-btn:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 8px 28px rgba(196, 148, 139, 0.35) !important;
+          box-shadow: 0 8px 28px rgba(122, 144, 72, 0.35) !important;
         }
         .login-btn:active:not(:disabled) {
           transform: translateY(0) scale(0.995);
@@ -171,7 +171,7 @@ export default function LoginPage() {
           position: relative;
         }
         .login-link:hover {
-          color: #b07d73 !important;
+          color: #637839 !important;
         }
         .login-link::after {
           content: '';
@@ -180,7 +180,7 @@ export default function LoginPage() {
           left: 0;
           width: 0;
           height: 1.5px;
-          background: #c4948b;
+          background: #7a9048;
           transition: width 0.3s ease;
         }
         .login-link:hover::after {
@@ -191,7 +191,7 @@ export default function LoginPage() {
           transition: all 0.2s ease;
         }
         .eye-toggle:hover {
-          color: #8b6b62 !important;
+          color: #4e602c !important;
           transform: scale(1.1);
         }
 
@@ -210,7 +210,7 @@ export default function LoginPage() {
       <div className="login-split" style={{
         display: 'flex',
         minHeight: '100vh',
-        fontFamily: "'Inter', -apple-system, sans-serif",
+        fontFamily: "'Poppins', system-ui, sans-serif",
       }}>
 
         {/* ═══════════ LEFT PANEL — Brand & Decoration ═══════════ */}
@@ -218,7 +218,7 @@ export default function LoginPage() {
           flex: '1 1 50%',
           position: 'relative',
           overflow: 'hidden',
-          background: 'linear-gradient(160deg, #f5ece4 0%, #f0e4da 30%, #ebe0d8 60%, #f5ece4 100%)',
+          background: 'linear-gradient(160deg, #f0f3e6 0%, #e8ecda 30%, #e2e8d4 60%, #f0f3e6 100%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -229,16 +229,16 @@ export default function LoginPage() {
           <div style={{
             position: 'absolute',
             inset: 0,
-            background: 'radial-gradient(circle at 30% 20%, rgba(212, 166, 154, 0.15) 0%, transparent 50%), radial-gradient(circle at 70% 80%, rgba(196, 148, 139, 0.1) 0%, transparent 50%)',
+            background: 'radial-gradient(circle at 30% 20%, rgba(122, 144, 72, 0.12) 0%, transparent 50%), radial-gradient(circle at 70% 80%, rgba(99, 120, 57, 0.08) 0%, transparent 50%)',
           }} />
 
           {/* Floating decorative bubbles */}
-          <FloatingBubble size={80} x="15%" y="18%" delay={0} color="rgba(212, 166, 154, 0.2)" />
-          <FloatingBubble size={50} x="72%" y="12%" delay={1.5} color="rgba(201, 145, 138, 0.15)" />
-          <FloatingBubble size={35} x="82%" y="65%" delay={0.8} color="rgba(180, 130, 120, 0.18)" />
-          <FloatingBubble size={60} x="8%" y="72%" delay={2} color="rgba(212, 166, 154, 0.14)" />
-          <FloatingBubble size={25} x="55%" y="85%" delay={1.2} color="rgba(196, 148, 139, 0.2)" />
-          <FloatingBubble size={45} x="40%" y="8%" delay={0.5} color="rgba(225, 190, 180, 0.18)" />
+          <FloatingBubble size={80} x="15%" y="18%" delay={0} color="rgba(122, 144, 72, 0.18)" />
+          <FloatingBubble size={50} x="72%" y="12%" delay={1.5} color="rgba(99, 120, 57, 0.13)" />
+          <FloatingBubble size={35} x="82%" y="65%" delay={0.8} color="rgba(78, 96, 44, 0.16)" />
+          <FloatingBubble size={60} x="8%" y="72%" delay={2} color="rgba(122, 144, 72, 0.12)" />
+          <FloatingBubble size={25} x="55%" y="85%" delay={1.2} color="rgba(99, 120, 57, 0.18)" />
+          <FloatingBubble size={45} x="40%" y="8%" delay={0.5} color="rgba(145, 166, 98, 0.16)" />
 
           {/* Decorative chat bubbles */}
           <ChatBubbleDecor text="¡Hola! ¿Cómo estás?" x="12%" y="28%" delay={0.3} align="left" />
@@ -257,12 +257,12 @@ export default function LoginPage() {
               width: '72px',
               height: '72px',
               borderRadius: '22px',
-              background: 'linear-gradient(135deg, #c4948b, #d4a69a)',
+              background: 'linear-gradient(135deg, #7a9048, #91a662)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 24px',
-              boxShadow: '0 8px 32px rgba(196, 148, 139, 0.3)',
+              boxShadow: '0 8px 32px rgba(122, 144, 72, 0.28)',
               animation: 'pulseGlow 3s ease-in-out infinite',
             }}>
               <svg width="34" height="34" viewBox="0 0 24 24" fill="white">
@@ -271,10 +271,10 @@ export default function LoginPage() {
             </div>
 
             <h2 style={{
-              fontFamily: "'Playfair Display', serif",
+              fontFamily: "'Poppins', system-ui, sans-serif",
               fontSize: '42px',
               fontWeight: 600,
-              color: '#3d3530',
+              color: '#242d16',
               letterSpacing: '-0.02em',
               marginBottom: '12px',
               lineHeight: 1.1,
@@ -284,7 +284,7 @@ export default function LoginPage() {
 
             <p style={{
               fontSize: '16px',
-              color: '#9a8a82',
+              color: '#7a8a6a',
               fontWeight: 400,
               maxWidth: '280px',
               lineHeight: 1.6,
@@ -298,7 +298,7 @@ export default function LoginPage() {
             <div style={{
               width: '40px',
               height: '2px',
-              background: 'linear-gradient(90deg, transparent, #c4948b, transparent)',
+              background: 'linear-gradient(90deg, transparent, #7a9048, transparent)',
               margin: '28px auto 0',
               borderRadius: '1px',
             }} />
@@ -312,7 +312,7 @@ export default function LoginPage() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(180deg, #faf8f5 0%, #ffffff 40%, #faf8f5 100%)',
+          background: 'linear-gradient(180deg, #f5f6f0 0%, #ffffff 40%, #f5f6f0 100%)',
           padding: '48px 40px',
           position: 'relative',
         }}>
@@ -323,7 +323,7 @@ export default function LoginPage() {
             top: '15%',
             bottom: '15%',
             width: '1px',
-            background: 'linear-gradient(180deg, transparent, rgba(196, 148, 139, 0.2), transparent)',
+            background: 'linear-gradient(180deg, transparent, rgba(122, 144, 72, 0.2), transparent)',
           }} />
 
           <div style={{
@@ -336,7 +336,7 @@ export default function LoginPage() {
               <p style={{
                 fontSize: '13px',
                 fontWeight: 500,
-                color: '#c4948b',
+                color: '#7a9048',
                 textTransform: 'uppercase',
                 letterSpacing: '0.12em',
                 marginBottom: '10px',
@@ -344,10 +344,10 @@ export default function LoginPage() {
                 Bienvenido de vuelta
               </p>
               <h1 style={{
-                fontFamily: "'Playfair Display', serif",
+                fontFamily: "'Poppins', system-ui, sans-serif",
                 fontSize: '32px',
                 fontWeight: 600,
-                color: '#2d2a26',
+                color: '#242d16',
                 letterSpacing: '-0.02em',
                 lineHeight: 1.2,
                 marginBottom: '8px',
@@ -356,7 +356,7 @@ export default function LoginPage() {
               </h1>
               <p style={{
                 fontSize: '14px',
-                color: '#a89e96',
+                color: '#8a9a7a',
                 fontWeight: 400,
                 lineHeight: 1.5,
               }}>
@@ -369,7 +369,7 @@ export default function LoginPage() {
               background: 'rgba(255, 255, 255, 0.7)',
               backdropFilter: 'blur(20px)',
               borderRadius: '24px',
-              border: '1px solid rgba(212, 166, 154, 0.15)',
+              border: '1px solid rgba(122, 144, 72, 0.15)',
               boxShadow: '0 4px 6px rgba(0,0,0,0.02), 0 24px 64px rgba(0,0,0,0.05)',
               padding: '36px 32px 32px',
             }}>
@@ -381,7 +381,7 @@ export default function LoginPage() {
                     display: 'block',
                     fontSize: '11px',
                     fontWeight: 600,
-                    color: focusedField === 'email' ? '#c4948b' : '#8b8179',
+                    color: focusedField === 'email' ? '#7a9048' : '#6a7a5a',
                     marginBottom: '8px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
@@ -395,7 +395,7 @@ export default function LoginPage() {
                       left: '16px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      color: focusedField === 'email' ? '#c4948b' : '#c4b5ad',
+                      color: focusedField === 'email' ? '#7a9048' : '#9aaa82',
                       display: 'flex',
                       pointerEvents: 'none',
                       transition: 'color 0.3s ease',
@@ -417,12 +417,12 @@ export default function LoginPage() {
                       style={{
                         width: '100%',
                         padding: '14px 16px 14px 44px',
-                        border: `1.5px solid ${errors.email ? '#e8a0a0' : '#ebe0d8'}`,
+                        border: `1.5px solid ${errors.email ? '#e8a0a0' : '#d4dcc0'}`,
                         borderRadius: '14px',
                         color: '#2d2a26',
                         fontSize: '14px',
                         fontWeight: 400,
-                        background: '#faf8f5',
+                        background: '#f5f6f0',
                         letterSpacing: '0.01em',
                       }}
                     />
@@ -452,7 +452,7 @@ export default function LoginPage() {
                     display: 'block',
                     fontSize: '11px',
                     fontWeight: 600,
-                    color: focusedField === 'password' ? '#c4948b' : '#8b8179',
+                    color: focusedField === 'password' ? '#7a9048' : '#6a7a5a',
                     marginBottom: '8px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
@@ -466,7 +466,7 @@ export default function LoginPage() {
                       left: '16px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      color: focusedField === 'password' ? '#c4948b' : '#c4b5ad',
+                      color: focusedField === 'password' ? '#7a9048' : '#9aaa82',
                       display: 'flex',
                       pointerEvents: 'none',
                       transition: 'color 0.3s ease',
@@ -488,12 +488,12 @@ export default function LoginPage() {
                       style={{
                         width: '100%',
                         padding: '14px 48px 14px 44px',
-                        border: `1.5px solid ${errors.password ? '#e8a0a0' : '#ebe0d8'}`,
+                        border: `1.5px solid ${errors.password ? '#e8a0a0' : '#d4dcc0'}`,
                         borderRadius: '14px',
                         color: '#2d2a26',
                         fontSize: '14px',
                         fontWeight: 400,
-                        background: '#faf8f5',
+                        background: '#f5f6f0',
                         letterSpacing: '0.05em',
                       }}
                     />
@@ -509,7 +509,7 @@ export default function LoginPage() {
                         background: 'none',
                         border: 'none',
                         cursor: 'pointer',
-                        color: '#c4b5ad',
+                        color: '#9aaa82',
                         padding: 0,
                         display: 'flex',
                         alignItems: 'center',
@@ -568,7 +568,7 @@ export default function LoginPage() {
                   style={{
                     width: '100%',
                     padding: '15px',
-                    background: 'linear-gradient(135deg, #c4948b, #b8877e)',
+                    background: 'linear-gradient(135deg, #7a9048, #637839)',
                     border: 'none',
                     borderRadius: '14px',
                     color: '#ffffff',
@@ -581,7 +581,7 @@ export default function LoginPage() {
                     justifyContent: 'center',
                     gap: '8px',
                     marginTop: '4px',
-                    boxShadow: '0 4px 18px rgba(196, 148, 139, 0.3)',
+                    boxShadow: '0 4px 18px rgba(122, 144, 72, 0.3)',
                     letterSpacing: '0.04em',
                   }}
                 >
@@ -611,10 +611,10 @@ export default function LoginPage() {
                   to="/register"
                   className="login-link"
                   style={{
-                    color: '#c4948b',
+                    color: '#7a9048',
                     fontWeight: 600,
                     textDecoration: 'none',
-                    fontFamily: "'Inter', sans-serif",
+                    fontFamily: "'Poppins', system-ui, sans-serif",
                   }}
                 >
                   Regístrate gratis
@@ -634,7 +634,7 @@ export default function LoginPage() {
                 justifyContent: 'center',
                 gap: '16px',
                 fontSize: '11px',
-                color: '#c4b5ad',
+                color: '#9aaa82',
               }}>
                 <span>Privacidad</span>
                 <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#d8cfc8' }} />
