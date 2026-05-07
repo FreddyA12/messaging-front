@@ -4,16 +4,19 @@ import { persist } from 'zustand/middleware'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ChatBg   = 'default' | 'warm' | 'slate' | 'mint' | 'forest' | 'dots' | 'lines'
 export type Palette  = 'olive' | 'slate' | 'terra' | 'sage' | 'charcoal'
+export type FontSize = 'small' | 'normal' | 'large'
 
 interface AppearanceState {
   theme:          ThemeMode
   chatBackground: ChatBg
   palette:        Palette
+  fontSize:       FontSize
   localStatus:    string   // estado guardado localmente hasta que haya backend
 
   setTheme:          (t: ThemeMode) => void
   setChatBackground: (b: ChatBg)   => void
   setPalette:        (p: Palette)  => void
+  setFontSize:       (f: FontSize) => void
   setLocalStatus:    (s: string)   => void
 }
 
@@ -23,11 +26,13 @@ export const useAppearanceStore = create<AppearanceState>()(
       theme:          'light',
       chatBackground: 'default',
       palette:        'olive',
+      fontSize:       'normal',
       localStatus:    '',
 
       setTheme:          (theme)          => set({ theme }),
       setChatBackground: (chatBackground) => set({ chatBackground }),
       setPalette:        (palette)        => set({ palette }),
+      setFontSize:       (fontSize)       => set({ fontSize }),
       setLocalStatus:    (localStatus)    => set({ localStatus }),
     }),
     { name: 'whispr-appearance' },

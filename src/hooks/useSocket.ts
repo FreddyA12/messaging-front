@@ -25,6 +25,7 @@ function toMessage(dto: MessageDTO): Message {
     attachments: dto.attachments ?? [],
     linkPreviews: dto.linkPreviews ?? [],
     replyTo: dto.replyTo ? toMessage(dto.replyTo) : null,
+    expiresAt: dto.expiresAt ?? null,
   }
 }
 
@@ -144,6 +145,52 @@ export function useChatSubscription(chatId: number | null) {
       readSub?.unsubscribe()
     }
   }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping, setPinned])
+}
+
+/**
+ * Subscribes to all given chat topics to keep lastMessage and unreadCount
+ * updated in real-time for chats that are not currently active.
+ */
+export function useAllChatsNotifications(chatIds: number[]) {
+  const updateLastMessage = useChatStore((s) => s.updateLastMessage)
+  const incrementUnread = useChatStore((s) => s.incrementUnread)
+
+  // Stable string key so the effect only re-runs when the set of IDs actually changes
+  const idsKey = chatIds.slice().sort((a, b) => a - b).join(',')
+
+  useEffect(() => {
+    if (chatIds.length === 0) return
+
+    const subs: (StompSubscription | null)[] = []
+
+    connectSocket()
+      .then(() => {
+        for (const cid of chatIds) {
+          const sub = subscribe(`/topic/chat.${cid}`, (body) => {
+            const event = body as ChatSocketEvent
+            if (event.type !== 'MESSAGE_NEW') return
+
+            const currentUserId = useAuthStore.getState().user?.id
+            const activeChatId = useChatStore.getState().activeChatId
+
+            updateLastMessage(event.payload.chatId, event.payload.content, event.payload.createdAt)
+
+            // Show badge only for messages from others in non-active chats
+            if (
+              event.payload.senderId !== currentUserId &&
+              event.payload.chatId !== activeChatId
+            ) {
+              incrementUnread(event.payload.chatId)
+            }
+          })
+          subs.push(sub)
+        }
+      })
+      .catch(console.error)
+
+    return () => subs.forEach((s) => s?.unsubscribe())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey, updateLastMessage, incrementUnread])
 }
 
 export function publishTypingStart(chatId: number, userId: number, userName: string): void {

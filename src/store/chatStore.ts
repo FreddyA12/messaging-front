@@ -31,6 +31,7 @@ export interface Message {
   isStarred: boolean
   attachments: AttachmentDTO[]
   linkPreviews: LinkPreviewDTO[]
+  expiresAt: string | null
 }
 
 interface PresenceEntry {
@@ -56,6 +57,8 @@ interface ChatState {
 
   setChats: (chats: ChatListItem[]) => void
   setActiveChat: (chatId: number | null) => void
+  incrementUnread: (chatId: number) => void
+  clearUnread: (chatId: number) => void
   setMessages: (chatId: number, messages: Message[]) => void
   addMessage: (message: Message) => void
   prependMessages: (chatId: number, messages: Message[]) => void
@@ -74,6 +77,7 @@ interface ChatState {
   setPinned: (messageId: number, chatId: number, isPinned: boolean) => void
   setStarredMessages: (messages: Message[]) => void
   toggleStarred: (messageId: number, isStarred: boolean) => void
+  removeMessage: (messageId: number) => void
 }
 
 function mapAllMessages(
@@ -99,7 +103,21 @@ export const useChatStore = create<ChatState>((set) => ({
   starredMessages: [],
 
   setChats: (chats) => set({ chats }),
-  setActiveChat: (chatId) => set({ activeChatId: chatId }),
+  setActiveChat: (chatId) =>
+    set((s) => ({
+      activeChatId: chatId,
+      chats: s.chats.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c)),
+    })),
+  incrementUnread: (chatId) =>
+    set((s) => ({
+      chats: s.chats.map((c) =>
+        c.id === chatId ? { ...c, unreadCount: c.unreadCount + 1 } : c,
+      ),
+    })),
+  clearUnread: (chatId) =>
+    set((s) => ({
+      chats: s.chats.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c)),
+    })),
   setMessages: (chatId, messages) =>
     set((s) => ({ messages: { ...s.messages, [chatId]: messages } })),
   addMessage: (message) =>
@@ -224,4 +242,12 @@ export const useChatStore = create<ChatState>((set) => ({
         ? s.starredMessages
         : s.starredMessages.filter((m) => m.id !== messageId),
     })),
+  removeMessage: (messageId) =>
+    set((s) => {
+      const result: Record<number, Message[]> = {}
+      for (const [cId, msgs] of Object.entries(s.messages)) {
+        result[Number(cId)] = msgs.filter((m) => m.id !== messageId)
+      }
+      return { messages: result }
+    }),
 }))

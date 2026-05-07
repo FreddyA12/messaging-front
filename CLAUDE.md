@@ -56,9 +56,12 @@ Al terminar cada fase, actualiza la tabla de abajo con los archivos modificados,
 | 4 — Pin, Star, Forward, Search | ✅ | `types/chat.ts`, `store/chatStore.ts`, `hooks/useSocket.ts`, `features/chat/api.ts`, `MessageBubble.tsx`, `ChatWindow.tsx`, `PinnedMessageBanner.tsx`, `StarredMessagesView.tsx`, `ForwardDialog.tsx` | Ver detalle abajo. |
 | 5 — Multimedia | ✅ | `types/chat.ts`, `store/chatStore.ts`, `utils/imageCompression.ts`, `hooks/useAttachmentBlob.ts`, `features/media/api.ts`, `features/media/components/MediaGallery.tsx`, `MediaTab.tsx`, `DocumentsTab.tsx`, `LinksTab.tsx`, `AudiosTab.tsx`, `features/chat/components/ImageBubble.tsx`, `VideoBubble.tsx`, `AudioBubble.tsx`, `DocumentBubble.tsx`, `LinkPreviewCard.tsx`, `AttachMenu.tsx`, `AttachPreview.tsx`, `MessageBubble.tsx`, `ChatWindow.tsx` | Ver detalle abajo. |
 | 6 — Llamadas WebRTC | ✅ | `types/call.ts`, `store/callStore.ts`, `features/calls/api.ts`, `features/calls/hooks/useWebRTC.ts`, `features/calls/components/CallManager.tsx`, `IncomingCallOverlay.tsx`, `CallScreen.tsx`, `routes/MainLayout.tsx`, `features/chat/components/ChatWindow.tsx` | Ver detalle abajo. |
-| 7 — Grupos | 🔲 | — | — |
-| 8 — Personalización | 🔲 | — | — |
-| 9 — Privacidad y notificaciones | 🔲 | — | — |
+| 7 — Grupos | ✅ | `features/chat/components/GroupInfoPanel.tsx`, `CreateGroupDialog.tsx`, `ChatWindow.tsx` | Panel de info de grupo, crear grupo, gestión de miembros, enlace de invitación. |
+| 8 — Personalización | ✅ | `store/appearanceStore.ts`, `App.tsx` (ThemeProvider), `features/settings/SettingsPage.tsx`, `features/settings/api.ts`, `hooks/useTheme.ts` | Dark/light/system theme, paletas de color, font size, fondo de chat, sincroniza con backend. |
+| 9 — Privacidad y notificaciones | ✅ | `hooks/useNotifications.ts`, `routes/MainLayout.tsx`, `features/settings/SettingsPage.tsx` | Browser Notification API, privacy settings (last-seen, profile-pic, read receipts). |
+| 10 — Mensajes Temporales | ✅ | `types/chat.ts`, `features/chat/api.ts`, `store/chatStore.ts`, `features/chat/components/MessageBubble.tsx`, `TtlPickerDialog.tsx`, `ChatWindow.tsx` | expiresAt en mensajes, countdown timer, TTL picker dialog, cleanup job en backend, removeMessage en store. TTL selector en input. |
+| 11 — Historias (Stories) | ✅ | `types/story.ts`, `store/storyStore.ts`, `features/stories/api.ts`, `features/stories/components/StoriesBar.tsx`, `StoryViewer.tsx`, `CreateStoryDialog.tsx`, `routes/MainLayout.tsx` | Feed agrupado por usuario, visor full-screen con progreso, texto o imagen/video, 24h TTL, cleanup cada hora en backend. |
+| Fixes & mejoras post-11 | ✅ | `MainLayout.tsx`, `chatStore.ts`, `hooks/useSocket.ts`, `StoriesList.tsx`, `StoriesPanel.tsx`, `StoryPrivacyDialog.tsx`, `features/stories/api.ts`, `SettingsPage.tsx` | Ver detalle abajo. |
 
 ---
 
@@ -376,6 +379,133 @@ WS servidor → cliente (en `/user/queue/calls`):
 
 ---
 
+## Fase 7 — Detalle de implementación
+
+### Componentes nuevos
+- `GroupInfoPanel.tsx` — panel lateral derecho con miembros, roles, enlace de invitación, añadir/eliminar miembros (solo admins)
+- `CreateGroupDialog.tsx` — modal para crear grupo: nombre, descripción, seleccionar miembros de la lista de contactos
+
+### Integración en ChatWindow
+- Botón "personas" en header (solo para chats GROUP) → toggle `showGroupInfo`
+- Panel mutuamente excluyente con `StarredMessagesView` y `MediaGallery`
+- `GroupInfoPanel` recibe `chatId`, `chatName`, `description`, `onClose`
+
+### API (`src/features/chat/api.ts`)
+- `createGroup(data)`, `getGroupMembers(chatId)`, `addGroupMembers(chatId, userIds)`, `removeGroupMember(chatId, userId)`, `changeGroupMemberRole(chatId, userId, role)`, `generateInviteLink(chatId)`, `joinByCode(code)`, `leaveGroup(chatId)`
+
+---
+
+## Fase 8 — Detalle de implementación
+
+### appearanceStore (`src/store/appearanceStore.ts`)
+- `FontSize = 'small' | 'normal' | 'large'`
+- `fontSize: FontSize` (default `'normal'`), `setFontSize`
+- `theme: 'light' | 'dark' | 'system'`, palettes, chatBackground
+
+### ThemeProvider (`src/App.tsx`)
+- Componente wrapping `AppRoutes`; aplica dark/light/system via media query listener
+- Aplica CSS vars `--color-primary`, `--color-primary-dark`, `--color-primary-light`, `--bubble-outgoing`
+- Aplica `font-small`/`font-large` a `<html>`
+
+### SettingsPage (`src/features/settings/SettingsPage.tsx`)
+- `ProfileSection`: editar nombre, estado, avatar (POST /api/users/me/avatar)
+- `ChatsSection`: selector tema, paleta de color, fondo de chat, font size — sincroniza via `settingsApi.updatePreferences`
+- `AccountSection`: privacidad last-seen/foto (EVERYONE/CONTACTS/NOBODY), read receipts — `settingsApi.updatePrivacy`
+
+### settingsApi / userApi (`src/features/settings/api.ts`)
+- `settingsApi.getPreferences()`, `updatePreferences(data)`, `updatePrivacy(data)`
+- `userApi.updateProfile(data)`, `uploadAvatar(file)`
+
+---
+
+## Fase 9 — Detalle de implementación
+
+### useNotifications (`src/hooks/useNotifications.ts`)
+- Solicita permiso `Notification` al montar
+- Observa `messages` del chatStore; cuando tab no está en foco y llega mensaje nuevo de otro usuario en un chat no activo → muestra `new Notification(...)` con `tag: 'msg-${id}'`
+
+### Integración
+- `useNotifications()` llamado en `MainLayout.tsx`
+
+---
+
+## Fase 10 — Detalle de implementación
+
+### Tipos
+- `MessageDTO.expiresAt?: string | null` en `src/types/chat.ts`
+- `SendMessageRequest.ttlSeconds?: number` en `src/types/chat.ts`
+- `Message.expiresAt: string | null` en `src/store/chatStore.ts`
+
+### chatStore
+- `removeMessage(messageId)` — filtra el mensaje de todos los chats (para cuando expira localmente)
+
+### MessageBubble (`src/features/chat/components/MessageBubble.tsx`)
+- `useCountdown(expiresAt, onExpired)` hook con `useRef` para evitar stale closure
+- Muestra contador regresivo en área de timestamp (icono reloj naranja + tiempo formateado)
+- `formatCountdown(secs)` — `MM:SS` o `Xd`, `Xh`, `Xm`
+- Menú contextual: "⏱ Autodestrucción" / "⏱ Cambiar autodestrucción" solo en mensajes propios → llama `onSetTtl`
+- Props: `onSetTtl?: (message: Message) => void`
+
+### TtlPickerDialog (`src/features/chat/components/TtlPickerDialog.tsx`)
+- Modal con presets: 30s, 5min, 1h, 24h, 7d + input personalizado en segundos
+- "Cancelar autodestrucción" si `message.expiresAt` existe → `onConfirm(id, 0)`
+
+### ChatWindow (`src/features/chat/components/ChatWindow.tsx`)
+- `ttlMessage` state, `handleSetTtl(messageId, ttlSeconds)` → `chatApi.setMessageTtl`
+- Pasa `onSetTtl={setTtlMessage}` a `MessageBubble`
+- Renderiza `<TtlPickerDialog>` condicionalmente
+
+### Backend (messaging-service)
+- Migración 016: `expires_at TIMESTAMP` nullable en `messages` + índice
+- `ExpiredMessageCleanupJob` con `@Scheduled(fixedDelay=60_000)` — marca expirados como `deletedForEveryone`, emite `MESSAGE_DELETED` por WS
+- `PATCH /api/messages/{id}/ttl?ttlSeconds=X` — solo el autor
+
+---
+
+## Fase 11 — Detalle de implementación (Historias)
+
+### Tipos (`src/types/story.ts`)
+- `StoryDTO` — id, userId, userName, hasMedia, mimeType, hasThumbnail, textContent, backgroundColor, createdAt, expiresAt, viewedByMe, viewCount
+- `StoryUserGroupDTO` — userId, userName, hasUnviewed, stories[]
+
+### storyStore (`src/store/storyStore.ts`)
+- `feedGroups: StoryUserGroupDTO[]`, `myStories: StoryDTO[]`
+- Acciones: `setFeedGroups`, `setMyStories`, `addMyStory`, `removeMyStory`, `markViewed`
+
+### API (`src/features/stories/api.ts`)
+- `getFeed()` → GET /api/stories/feed → StoryUserGroupDTO[]
+- `getMyStories()` → GET /api/stories/my → StoryDTO[]
+- `createStory(form)` → POST /api/stories (multipart) → StoryDTO
+- `deleteStory(id)`, `viewStory(id)`, `mediaUrl(id)`, `thumbnailUrl(id)`
+
+### StoriesBar (`src/features/stories/components/StoriesBar.tsx`)
+- Barra horizontal sobre la lista de chats (en MainLayout.tsx)
+- Primer ítem: "Mi historia" — abre CreateStoryDialog si no hay historias propias, o las muestra
+- Historias no vistas: anillo verde degradado; vistas: anillo gris
+- Solo se renderiza si hay grupos o historias propias
+
+### StoryViewer (`src/features/stories/components/StoryViewer.tsx`)
+- Overlay full-screen negro
+- Barra de progreso por historia en la parte superior (auto-avance 5 segundos)
+- Zonas de tap (1/3 izquierda = anterior, 1/3 derecha = siguiente)
+- Teclado: Escape cierra, Flechas navegan
+- Al ver historia → `storiesApi.viewStory(id)` + `markViewed(id)` en store
+- Descarga media con fetch + Authorization header → blob URL
+
+### CreateStoryDialog (`src/features/stories/components/CreateStoryDialog.tsx`)
+- Dos tabs: Texto e Imagen/Video
+- Texto: textarea + selector de 8 colores de fondo + preview en tiempo real
+- Imagen/Video: file picker con preview, soporta image/* y video/*
+- Botón "Publicar" → POST /api/stories (multipart)
+
+### TTL selector en input (ChatWindow)
+- Botón reloj junto al textarea
+- Popover con opciones: sin autodestrucción, 30s, 5min, 1h, 24h, 7d
+- Punto naranja en el botón cuando hay TTL activo
+- Se pasa como `ttlSeconds` en el payload STOMP al enviar
+
+---
+
 ## Credenciales de Prueba
 
 Para testing y desarrollo, están disponibles los siguientes usuarios:
@@ -387,6 +517,34 @@ Para testing y desarrollo, están disponibles los siguientes usuarios:
 | carol@chat.com | password |
 
 **Nota**: Estos usuarios se crean automáticamente mediante Liquibase en modo desarrollo (contexto "dev"). Ver `messaging-service/src/main/resources/db/changelog/db.changelog-master.xml` changeset `seed-dev-users`.
+
+---
+
+## Fixes & mejoras post-fase 11 — Detalle
+
+### Bugs corregidos
+- **Auto-notificación al enviar**: `setActiveChat` ahora hace `unreadCount = 0` para ese chat al abrirlo
+- **Mensajes en tiempo real de chats no activos**: hook `useAllChatsNotifications(chatIds)` en `useSocket.ts` — suscribe a todos los topics `/topic/chat.{id}` simultáneamente; en `MESSAGE_NEW` incrementa `unreadCount` si `senderId !== yo` y `chatId !== activeChatId`
+- **Infinite loop**: `chatIds` en `MainLayout` memoizado con `useMemo` para que el selector de Zustand no cree array nuevo en cada render
+- **Blob URL historias**: `StoryViewer` y `StoriesPanel` usan `api.get(..., {responseType:'blob'})` (axios con baseURL y JWT) en lugar de `fetch` nativo
+
+### chatStore — acciones nuevas
+- `incrementUnread(chatId)` — suma 1 al badge de no leídos
+- `clearUnread(chatId)` — limpia badge
+- `setActiveChat` actualizado para llamar `clearUnread` automáticamente
+
+### Historias en sección propia (como WhatsApp Web)
+- `MainLayout.tsx`: pestaña **Chats** / **Historias**; estado `section` + `activeStory`
+- `StoriesList.tsx` (nuevo): lista vertical en el sidebar — "Mi historia" con `+`, anillo verde/gris, tiempo relativo, botón de privacidad
+- `StoriesPanel.tsx` (nuevo): visor en el panel principal (no overlay) — proporción 9:16 centrada en fondo negro, barras de progreso animadas, zonas de tap, flechas entre grupos, contador de vistas
+
+### Privacidad de historias
+- `StoryPrivacyDialog.tsx` (nuevo): modal con lista de contactos + toggle para ocultar historia a cada uno
+- `features/stories/api.ts`: `getPrivacy()` y `updatePrivacy(hiddenFromUserIds)`
+- Backend: tabla `story_privacy`, `StoryPrivacy.java`, `StoryPrivacyRepository`, `GET/PUT /api/stories/privacy`, feed filtra automáticamente (migración 019)
+
+### Avatar en Settings
+- `SettingsPage.tsx`: preview inmediato con `URL.createObjectURL` tras seleccionar foto; mensaje "Foto actualizada" / "Error al subir la foto"
 
 ## Instrucción para Claude
 

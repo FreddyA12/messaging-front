@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useAuth } from '../../hooks/useAuth'
-import { useAppearanceStore, PALETTES, CHAT_BACKGROUNDS, type ThemeMode, type ChatBg, type Palette } from '../../store/appearanceStore'
+import { useAppearanceStore, PALETTES, CHAT_BACKGROUNDS, type ThemeMode, type ChatBg, type Palette, type FontSize } from '../../store/appearanceStore'
+import { settingsApi, userApi } from './api'
 
 type Section = 'profile' | 'chats' | 'notifications' | 'account'
 
@@ -45,11 +46,42 @@ function Row({ label, desc, on, onChange }: { label: string; desc: string; on: b
 /* ── Profile Section ───────────────────────────────── */
 function ProfileSection() {
   const user = useAuthStore(s => s.user)
-  const status = useAppearanceStore(s => s.localStatus)
-  const setStatus = useAppearanceStore(s => s.setLocalStatus)
+  const localStatus = useAppearanceStore(s => s.localStatus)
+  const setLocalStatus = useAppearanceStore(s => s.setLocalStatus)
   const [editingStatus, setEditingStatus] = useState(false)
-  const [draft, setDraft] = useState(status || user?.statusText || '')
-  const displayStatus = status || user?.statusText || 'Hola, estoy usando Whispr'
+  const [draft, setDraft] = useState(localStatus || user?.statusText || '')
+  const displayStatus = localStatus || user?.statusText || 'Hola, estoy usando Whispr'
+  const [saving, setSaving] = useState(false)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarMsg, setAvatarMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const saveStatus = async (value: string) => {
+    setLocalStatus(value)
+    setEditingStatus(false)
+    setSaving(true)
+    try {
+      await userApi.updateProfile({ statusText: value })
+    } catch { /* silent */ } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const preview = URL.createObjectURL(file)
+    setAvatarPreview(preview)
+    setAvatarMsg(null)
+    try {
+      await userApi.uploadAvatar(file)
+      setAvatarMsg({ ok: true, text: 'Foto actualizada' })
+    } catch {
+      setAvatarPreview(null)
+      setAvatarMsg({ ok: false, text: 'Error al subir la foto' })
+    }
+    // Reset file input so same file can be re-selected
+    e.target.value = ''
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -61,13 +93,16 @@ function ProfileSection() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#fff', fontWeight: 700, fontSize: 36,
           boxShadow: '0 6px 24px rgba(122,144,72,.28)',
+          overflow: 'hidden', flexShrink: 0,
         }}>
-          {user?.name?.[0]?.toUpperCase()}
+          {avatarPreview
+            ? <img src={avatarPreview} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : user?.name?.[0]?.toUpperCase()
+          }
         </div>
 
         {/* Thought bubble */}
         <div style={{ position: 'relative', marginTop: 8 }}>
-          {/* bubble dots connector */}
           <span style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(122,144,72,.4)' }} />
             <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(122,144,72,.3)' }} />
@@ -84,13 +119,13 @@ function ProfileSection() {
                   onChange={e => setDraft(e.target.value)}
                   maxLength={140}
                   style={{ fontSize: 13, border: 'none', outline: 'none', flex: 1, fontFamily: "'Poppins',system-ui,sans-serif", color: '#242d16' }}
-                  onKeyDown={e => { if (e.key === 'Enter') { setStatus(draft); setEditingStatus(false) } if (e.key === 'Escape') setEditingStatus(false) }}
+                  onKeyDown={e => { if (e.key === 'Enter') saveStatus(draft); if (e.key === 'Escape') setEditingStatus(false) }}
                 />
-                <button onClick={() => { setStatus(draft); setEditingStatus(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7a9048', fontSize: 12, fontWeight: 600 }}>✓</button>
+                <button onClick={() => saveStatus(draft)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7a9048', fontSize: 12, fontWeight: 600 }}>✓</button>
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <p style={{ fontSize: 13, color: '#5a6a4a', flex: 1 }}>{displayStatus}</p>
+                <p style={{ fontSize: 13, color: saving ? '#9aaa82' : '#5a6a4a', flex: 1 }}>{displayStatus}</p>
                 <button onClick={() => { setDraft(displayStatus); setEditingStatus(true) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9aaa82', flexShrink: 0 }}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -103,9 +138,15 @@ function ProfileSection() {
 
         <p style={{ marginTop: 12, fontSize: 18, fontWeight: 700, color: '#242d16' }}>{user?.name}</p>
         <p style={{ fontSize: 12, color: '#8a9a7a' }}>{user?.email}</p>
-        <button style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: '#7a9048', background: 'rgba(122,144,72,.1)', border: '1.5px solid rgba(122,144,72,.2)', borderRadius: 20, padding: '6px 18px', cursor: 'pointer' }}>
+        <label style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: '#7a9048', background: 'rgba(122,144,72,.1)', border: '1.5px solid rgba(122,144,72,.2)', borderRadius: 20, padding: '6px 18px', cursor: 'pointer' }}>
           Cambiar foto
-        </button>
+          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+        </label>
+        {avatarMsg && (
+          <p style={{ fontSize: 11, marginTop: 6, color: avatarMsg.ok ? '#7a9048' : '#c0392b', fontWeight: 500 }}>
+            {avatarMsg.text}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -113,10 +154,26 @@ function ProfileSection() {
 
 /* ── Chats Section ─────────────────────────────────── */
 function ChatsSection() {
-  const { theme, chatBackground, palette, setTheme, setChatBackground, setPalette } = useAppearanceStore()
+  const { theme, chatBackground, palette, fontSize, setTheme, setChatBackground, setPalette, setFontSize } = useAppearanceStore()
   const [enterSend, setEnterSend] = useState(true)
   const [readReceipts, setReadReceipts] = useState(true)
   const [mediaSave, setMediaSave] = useState(false)
+
+  // Sync preferences to backend when they change
+  useEffect(() => {
+    const themeMap: Record<ThemeMode, string> = { light: 'LIGHT', dark: 'DARK', system: 'SYSTEM' }
+    const fontMap: Record<FontSize, string> = { small: 'SMALL', normal: 'NORMAL', large: 'LARGE' }
+    settingsApi.updatePreferences({
+      theme: themeMap[theme],
+      fontSize: fontMap[fontSize],
+    }).catch(() => { /* silent */ })
+  }, [theme, fontSize])
+
+  const FONT_SIZES: { value: FontSize; label: string }[] = [
+    { value: 'small',  label: 'Pequeña' },
+    { value: 'normal', label: 'Normal'  },
+    { value: 'large',  label: 'Grande'  },
+  ]
 
   const THEMES: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
     { value: 'light',  label: 'Claro',   icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg> },
@@ -176,13 +233,29 @@ function ChatsSection() {
 
             {/* Accent palette */}
             <p style={{ fontSize: 13, fontWeight: 600, color: '#242d16', margin: '20px 0 10px' }}>Color de acento</p>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
               {(Object.entries(PALETTES) as [Palette, typeof PALETTES[Palette]][]).map(([key, val]) => (
                 <button key={key} onClick={() => setPalette(key)} title={val.label} style={{
                   width: 36, height: 36, borderRadius: '50%', border: `3px solid ${palette === key ? val.primary : 'transparent'}`,
                   background: val.swatch, cursor: 'pointer', transition: 'all .2s',
                   boxShadow: palette === key ? `0 0 0 3px ${val.primary}40` : 'none',
                 }} />
+              ))}
+            </div>
+
+            {/* Font size */}
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#242d16', marginBottom: 10 }}>Tamaño de fuente</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {FONT_SIZES.map(f => (
+                <button key={f.value} onClick={() => setFontSize(f.value)} style={{
+                  ...card, flex: 1,
+                  background: fontSize === f.value ? 'rgba(122,144,72,.12)' : '#f5f6f0',
+                  borderColor: fontSize === f.value ? '#7a9048' : 'transparent',
+                  color: fontSize === f.value ? '#637839' : '#6a7a5a',
+                  fontSize: f.value === 'small' ? 11 : f.value === 'large' ? 15 : 13,
+                }}>
+                  {f.label}
+                </button>
               ))}
             </div>
           </div>
@@ -240,27 +313,112 @@ function NotificationsSection() {
 }
 
 /* ── Account ───────────────────────────────────────── */
+type PrivacyLevel = 'EVERYONE' | 'CONTACTS' | 'NOBODY'
+
 function AccountSection() {
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  const [lastSeen, setLastSeen]       = useState<PrivacyLevel>('EVERYONE')
+  const [profilePic, setProfilePic]   = useState<PrivacyLevel>('EVERYONE')
+  const [readReceipts, setReadReceipts] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const LEVELS: { value: PrivacyLevel; label: string }[] = [
+    { value: 'EVERYONE', label: 'Todos' },
+    { value: 'CONTACTS', label: 'Contactos' },
+    { value: 'NOBODY',   label: 'Nadie' },
+  ]
+
+  const savePrivacy = async () => {
+    setSaving(true)
+    try {
+      await settingsApi.updatePrivacy({
+        privacyLastSeen: lastSeen,
+        privacyProfilePic: profilePic,
+        privacyReadReceipts: readReceipts,
+      })
+    } catch { /* silent */ } finally {
+      setSaving(false)
+    }
+  }
+
+  const selectStyle = (active: boolean): React.CSSProperties => ({
+    padding: '5px 14px', borderRadius: 20, border: `1.5px solid ${active ? '#7a9048' : 'rgba(122,144,72,.2)'}`,
+    background: active ? 'rgba(122,144,72,.12)' : 'transparent', cursor: 'pointer', fontSize: 12,
+    fontWeight: active ? 600 : 400, color: active ? '#637839' : '#6a7a5a',
+    fontFamily: "'Poppins',system-ui,sans-serif", transition: 'all .15s',
+  })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {[
-        { label: 'Privacidad', desc: 'Quién puede ver tu foto y estado' },
-        { label: 'Dispositivos conectados', desc: 'Gestiona tus sesiones activas (próximamente)' },
-        { label: 'Eliminar cuenta', desc: 'Esta acción es irreversible', danger: true },
-      ].map(item => (
-        <button key={item.label} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
-          background: item.danger ? 'rgba(212,86,86,.06)' : 'rgba(122,144,72,.06)',
-          fontFamily: "'Poppins',system-ui,sans-serif",
-        }}>
+      {/* Privacy panel */}
+      <button onClick={() => setShowPrivacy(v => !v)} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
+        background: 'rgba(122,144,72,.06)', fontFamily: "'Poppins',system-ui,sans-serif",
+      }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 500, color: '#242d16', marginBottom: 2 }}>Privacidad</p>
+          <p style={{ fontSize: 12, color: '#8a9a7a' }}>Quién puede ver tu foto y estado</p>
+        </div>
+        <svg width="16" height="16" fill="none" stroke="#9aaa82" strokeWidth="2" viewBox="0 0 24 24">
+          <path d={showPrivacy ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {showPrivacy && (
+        <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(122,144,72,.04)', border: '1px solid rgba(122,144,72,.12)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <p style={{ fontSize: 14, fontWeight: 500, color: item.danger ? '#c0392b' : '#242d16', marginBottom: 2 }}>{item.label}</p>
-            <p style={{ fontSize: 12, color: '#8a9a7a' }}>{item.desc}</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#242d16', marginBottom: 8 }}>Última vez</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {LEVELS.map(l => <button key={l.value} onClick={() => setLastSeen(l.value)} style={selectStyle(lastSeen === l.value)}>{l.label}</button>)}
+            </div>
           </div>
-          <svg width="16" height="16" fill="none" stroke={item.danger ? '#c0392b' : '#9aaa82'} strokeWidth="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" strokeLinecap="round"/></svg>
-        </button>
-      ))}
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#242d16', marginBottom: 8 }}>Foto de perfil</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {LEVELS.map(l => <button key={l.value} onClick={() => setProfilePic(l.value)} style={selectStyle(profilePic === l.value)}>{l.label}</button>)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#242d16', marginBottom: 2 }}>Confirmaciones de lectura</p>
+              <p style={{ fontSize: 12, color: '#8a9a7a' }}>Permite que otros vean cuando lees</p>
+            </div>
+            <Toggle on={readReceipts} onChange={() => setReadReceipts(v => !v)} />
+          </div>
+          <button onClick={savePrivacy} disabled={saving} style={{
+            padding: '10px 24px', borderRadius: 12, border: 'none', cursor: 'pointer',
+            background: 'var(--color-primary, #7a9048)', color: '#fff', fontSize: 13, fontWeight: 600,
+            fontFamily: "'Poppins',system-ui,sans-serif", alignSelf: 'flex-end', opacity: saving ? 0.6 : 1,
+          }}>
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      )}
+
+      <button style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
+        background: 'rgba(122,144,72,.06)', fontFamily: "'Poppins',system-ui,sans-serif",
+      }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 500, color: '#242d16', marginBottom: 2 }}>Dispositivos conectados</p>
+          <p style={{ fontSize: 12, color: '#8a9a7a' }}>Gestiona tus sesiones activas (próximamente)</p>
+        </div>
+        <svg width="16" height="16" fill="none" stroke="#9aaa82" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" strokeLinecap="round"/></svg>
+      </button>
+
+      <button style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px', borderRadius: 14, border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%',
+        background: 'rgba(212,86,86,.06)', fontFamily: "'Poppins',system-ui,sans-serif",
+      }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 500, color: '#c0392b', marginBottom: 2 }}>Eliminar cuenta</p>
+          <p style={{ fontSize: 12, color: '#8a9a7a' }}>Esta acción es irreversible</p>
+        </div>
+        <svg width="16" height="16" fill="none" stroke="#c0392b" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" strokeLinecap="round"/></svg>
+      </button>
     </div>
   )
 }

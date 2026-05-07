@@ -1,8 +1,14 @@
 import { api } from '../../lib/axios'
-import type { ChatDTO, MessageDTO, SendMessageRequest } from '../../types/chat'
+import type { ChatDTO, GroupMemberDTO, MessageDTO, SendMessageRequest } from '../../types/chat'
 
 export interface ForwardRequest {
   chatIds: number[]
+}
+
+export interface CreateGroupRequest {
+  name: string
+  description?: string
+  memberIds?: number[]
 }
 
 export const chatApi = {
@@ -50,6 +56,9 @@ export const chatApi = {
   forwardMessage: (id: number, chatIds: number[]) =>
     api.post(`/api/messages/${id}/forward`, { chatIds }),
 
+  setMessageTtl: (id: number, ttlSeconds: number) =>
+    api.patch(`/api/messages/${id}/ttl`, null, { params: { ttlSeconds } }),
+
   getPinnedMessages: (chatId: number) =>
     api.get<MessageDTO[]>(`/api/chats/${chatId}/pinned`).then((r) => r.data),
 
@@ -58,4 +67,38 @@ export const chatApi = {
 
   searchMessages: (chatId: number, q: string) =>
     api.get<MessageDTO[]>(`/api/chats/${chatId}/messages/search`, { params: { q } }).then((r) => r.data),
+
+  // Groups
+  createGroup: (data: CreateGroupRequest) =>
+    api.post<ChatDTO>('/api/chats/groups', data).then((r) => r.data),
+
+  getGroupMembers: (chatId: number) =>
+    api.get<GroupMemberDTO[]>(`/api/chats/${chatId}/members`).then((r) => r.data),
+
+  addGroupMembers: (chatId: number, userIds: number[]) =>
+    api.post(`/api/chats/${chatId}/members`, { userIds }),
+
+  removeGroupMember: (chatId: number, userId: number) =>
+    api.delete(`/api/chats/${chatId}/members/${userId}`),
+
+  changeGroupMemberRole: (chatId: number, userId: number, role: 'ADMIN' | 'MEMBER') =>
+    api.patch(`/api/chats/${chatId}/members/${userId}/role`, { role }),
+
+  generateInviteLink: (chatId: number) =>
+    api.post<{ code: string; link: string }>(`/api/chats/${chatId}/invite-link`).then((r) => r.data),
+
+  joinByCode: (code: string) =>
+    api.post<ChatDTO>(`/api/chats/join/${code}`).then((r) => r.data),
+
+  leaveGroup: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}`),
+
+  muteChat: (chatId: number, minutes: number) =>
+    api.patch(`/api/chats/${chatId}/mute`, null, { params: { minutes } }),
+
+  unmuteChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/mute`),
+
+  exportChat: (chatId: number) =>
+    api.get(`/api/chats/${chatId}/export`, { responseType: 'blob' }).then((r) => r.data as Blob),
 }

@@ -17,16 +17,12 @@ import { ForwardDialog } from './ForwardDialog'
 import { AttachMenu, type AttachType } from './AttachMenu'
 import { AttachPreview } from './AttachPreview'
 import { MediaGallery } from '../../media/components/MediaGallery'
+import { GroupInfoPanel } from './GroupInfoPanel'
+import { TtlPickerDialog } from './TtlPickerDialog'
 import { useCallStore } from '../../../store/callStore'
 import type { CallType } from '../../../types/call'
 
 const TYPING_STOP_DELAY = 3000
-
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500',
-  'bg-teal-500', 'bg-indigo-500', 'bg-red-500', 'bg-amber-500',
-]
-const avatarColor = (name: string) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 
 function formatLastSeen(iso: string): string {
   const date = new Date(iso)
@@ -78,6 +74,7 @@ export function ChatWindow() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null)
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null)
+  const [ttlMessage, setTtlMessage] = useState<Message | null>(null)
   const [showStarred, setShowStarred] = useState(false)
   const [loadingStarred, setLoadingStarred] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -86,7 +83,14 @@ export function ChatWindow() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null)
   const [showGallery, setShowGallery] = useState(false)
+  const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [showChatMenu, setShowChatMenu] = useState(false)
+  const [mutedUntil, setMutedUntil] = useState<Date | null>(null)
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [groupMembers, setGroupMembers] = useState<{ userId: number; name: string }[]>([])
+  const [newMessageTtl, setNewMessageTtl] = useState<number | null>(null)
+  const [showTtlMenu, setShowTtlMenu] = useState(false)
   const [pendingAttach, setPendingAttach] = useState<{
     file: File
     type: AttachType
@@ -150,6 +154,9 @@ export function ChatWindow() {
       setSearchQuery('')
       setSearchResults([])
       setShowGallery(false)
+      setShowGroupInfo(false)
+      setNewMessageTtl(null)
+      setShowTtlMenu(false)
       cancelAttach()
       inputRef.current?.focus()
     }
@@ -289,6 +296,7 @@ export function ChatWindow() {
         type: pendingAttach?.type ?? 'TEXT',
         replyToId: replyTo?.id,
         attachmentIds,
+        ttlSeconds: newMessageTtl ?? undefined,
       })
       setReplyTo(null)
     }
@@ -299,7 +307,23 @@ export function ChatWindow() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
+    const val = e.target.value
+    setInput(val)
+
+    // @mention detection (GROUP chats only)
+    if (activeChat?.type === 'GROUP') {
+      const at = val.lastIndexOf('@')
+      if (at !== -1 && (at === 0 || val[at - 1] === ' ' || val[at - 1] === '\n')) {
+        const query = val.slice(at + 1)
+        if (!query.includes(' ')) {
+          setMentionQuery(query)
+        } else {
+          setMentionQuery(null)
+        }
+      } else {
+        setMentionQuery(null)
+      }
+    }
 
     if (!activeChatId || !currentUser) return
 
@@ -391,6 +415,11 @@ export function ChatWindow() {
     setPinned(messageId, activeChatId, false)
   }
 
+  const handleSetTtl = async (messageId: number, ttlSeconds: number) => {
+    await chatApi.setMessageTtl(messageId, ttlSeconds)
+    setTtlMessage(null)
+  }
+
   const handleForwardConfirm = async (chatIds: number[]) => {
     if (!forwardingMessage) return
     await chatApi.forwardMessage(forwardingMessage.id, chatIds)
@@ -452,6 +481,52 @@ export function ChatWindow() {
   }
 
   const canCall = activeChat?.type === 'PRIVATE' && activeChat.otherUserId != null && !activeCall
+
+  const handleMute = async (minutes: number) => {
+    if (!activeChatId) return
+    await chatApi.muteChat(activeChatId, minutes)
+    setMutedUntil(new Date(Date.now() + minutes * 60_000))
+    setShowChatMenu(false)
+  }
+
+  const handleUnmute = async () => {
+    if (!activeChatId) return
+    await chatApi.unmuteChat(activeChatId)
+    setMutedUntil(null)
+    setShowChatMenu(false)
+  }
+
+  const handleExport = async () => {
+    if (!activeChatId) return
+    setShowChatMenu(false)
+    const blob = await chatApi.exportChat(activeChatId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `chat-${activeChatId}.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Load group members for @mention autocomplete
+  useEffect(() => {
+    if (activeChat?.type === 'GROUP' && activeChatId) {
+      chatApi.getGroupMembers(activeChatId)
+        .then((members) => setGroupMembers(members.map((m) => ({ userId: m.userId, name: m.name }))))
+        .catch(() => {})
+    } else {
+      setGroupMembers([])
+    }
+  }, [activeChatId, activeChat?.type])
+
+  const handleMentionSelect = (name: string) => {
+    const at = input.lastIndexOf('@')
+    if (at === -1) return
+    const newInput = input.slice(0, at) + '@' + name + ' '
+    setInput(newInput)
+    setMentionQuery(null)
+    inputRef.current?.focus()
+  }
 
   if (!activeChat) {
     return (
@@ -587,7 +662,7 @@ export function ChatWindow() {
                 </svg>
               </button>
               <button
-                onClick={showStarred ? () => setShowStarred(false) : openStarredPanel}
+                onClick={showStarred ? () => setShowStarred(false) : () => { openStarredPanel(); setShowGallery(false); setShowGroupInfo(false) }}
                 className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors
                   ${showStarred
                     ? 'text-primary-500 bg-primary-50'
@@ -600,7 +675,7 @@ export function ChatWindow() {
                 </svg>
               </button>
               <button
-                onClick={() => { setShowGallery((v) => !v); setShowStarred(false) }}
+                onClick={() => { setShowGallery((v) => !v); setShowStarred(false); setShowGroupInfo(false) }}
                 className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors
                   ${showGallery
                     ? 'text-primary-500 bg-primary-50'
@@ -613,6 +688,74 @@ export function ChatWindow() {
                     d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                 </svg>
               </button>
+              {activeChat.type === 'GROUP' && (
+                <button
+                  onClick={() => { setShowGroupInfo((v) => !v); setShowStarred(false); setShowGallery(false) }}
+                  className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors
+                    ${showGroupInfo
+                      ? 'text-primary-500 bg-primary-50'
+                      : 'text-gray-400 hover:text-primary-600 hover:bg-primary-50'
+                    }`}
+                  title="Info del grupo"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
+              {/* ⋮ More menu */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowChatMenu((v) => !v)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400
+                             hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                  title="Más opciones"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                  </svg>
+                </button>
+                {showChatMenu && (
+                  <div
+                    className="absolute right-0 top-9 z-40 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 min-w-[200px]"
+                    onMouseLeave={() => setShowChatMenu(false)}
+                  >
+                    {mutedUntil && mutedUntil > new Date() ? (
+                      <button
+                        onClick={handleUnmute}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Activar notificaciones
+                      </button>
+                    ) : (
+                      <>
+                        <p className="px-4 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Silenciar</p>
+                        {[
+                          { label: '8 horas', minutes: 480 },
+                          { label: '1 semana', minutes: 10080 },
+                          { label: 'Siempre', minutes: 525_600 },
+                        ].map((opt) => (
+                          <button
+                            key={opt.minutes}
+                            onClick={() => handleMute(opt.minutes)}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                    <button
+                      onClick={handleExport}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Exportar historial
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -722,6 +865,7 @@ export function ChatWindow() {
                       onPin={handlePin}
                       onStar={handleStar}
                       onForward={setForwardingMessage}
+                      onSetTtl={setTtlMessage}
                       onScrollToReply={scrollToMessage}
                       setRef={setMessageRef}
                       isHighlighted={highlightedMessageId === msg.id}
@@ -773,6 +917,32 @@ export function ChatWindow() {
           />
         )}
 
+        {/* @mention autocomplete */}
+        {mentionQuery !== null && activeChat?.type === 'GROUP' && (
+          (() => {
+            const filtered = groupMembers.filter(
+              (m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase()) && m.userId !== currentUser?.id
+            )
+            if (filtered.length === 0) return null
+            return (
+              <div className="border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 max-h-40 overflow-y-auto">
+                {filtered.map((m) => (
+                  <button
+                    key={m.userId}
+                    onMouseDown={(e) => { e.preventDefault(); handleMentionSelect(m.name) }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0">
+                      {m.name[0].toUpperCase()}
+                    </span>
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            )
+          })()
+        )}
+
         {/* Input */}
         {!showSearch && (
           <div style={{
@@ -799,6 +969,57 @@ export function ChatWindow() {
                 />
               )}
             </div>
+            {/* TTL selector */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                onClick={() => setShowTtlMenu((v) => !v)}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors
+                  ${newMessageTtl
+                    ? 'text-orange-500 bg-orange-50'
+                    : 'text-gray-400 hover:text-primary-500 hover:bg-primary-50'
+                  }`}
+                title={newMessageTtl ? 'Autodestrucción activa' : 'Autodestrucción del mensaje'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {newMessageTtl && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-orange-400 rounded-full" />
+                )}
+              </button>
+              {showTtlMenu && (
+                <div
+                  className="absolute bottom-12 left-0 z-30 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 min-w-[180px]"
+                  onMouseLeave={() => setShowTtlMenu(false)}
+                >
+                  <p className="px-4 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Autodestrucción
+                  </p>
+                  {[
+                    { label: 'Sin autodestrucción', seconds: null },
+                    { label: '30 segundos', seconds: 30 },
+                    { label: '5 minutos', seconds: 300 },
+                    { label: '1 hora', seconds: 3600 },
+                    { label: '24 horas', seconds: 86400 },
+                    { label: '7 días', seconds: 604800 },
+                  ].map((opt) => (
+                    <button
+                      key={String(opt.seconds)}
+                      onClick={() => { setNewMessageTtl(opt.seconds); setShowTtlMenu(false) }}
+                      className={`w-full text-left px-4 py-2 text-sm transition-colors
+                        ${newMessageTtl === opt.seconds
+                          ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <textarea
               ref={inputRef}
               value={input}
@@ -889,6 +1110,15 @@ export function ChatWindow() {
             onClose={() => setForwardingMessage(null)}
           />
         )}
+
+        {/* TTL picker dialog */}
+        {ttlMessage && (
+          <TtlPickerDialog
+            message={ttlMessage}
+            onConfirm={handleSetTtl}
+            onClose={() => setTtlMessage(null)}
+          />
+        )}
       </div>
 
       {/* Starred messages panel */}
@@ -908,6 +1138,16 @@ export function ChatWindow() {
           chatId={activeChatId}
           onClose={() => setShowGallery(false)}
           onScrollTo={(id) => { setShowGallery(false); scrollToMessage(id) }}
+        />
+      )}
+
+      {/* Group info panel */}
+      {showGroupInfo && activeChat.type === 'GROUP' && (
+        <GroupInfoPanel
+          chatId={activeChat.id}
+          chatName={activeChat.name}
+          description={undefined}
+          onClose={() => setShowGroupInfo(false)}
         />
       )}
     </div>
