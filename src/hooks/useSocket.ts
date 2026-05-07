@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { connectSocket, disconnectSocket, subscribe, publish } from '../lib/socket'
 import { useChatStore, type Message } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
+import { useEncryptionStore } from '../store/encryptionStore'
+import { safeDecrypt } from '../lib/afin'
 import { chatApi } from '../features/chat/api'
 import type { StompSubscription } from '@stomp/stompjs'
 import type {
@@ -16,10 +18,18 @@ import type {
   MessageDTO,
 } from '../types/chat'
 
+function decryptContent(content: string | null | undefined): string | null {
+  if (!content) return content ?? null
+  const { a, b } = useEncryptionStore.getState()
+  if (a === null || b === null) return content
+  return safeDecrypt(content, a, b)
+}
+
 // Convert MessageDTO to Message with proper defaults
 function toMessage(dto: MessageDTO): Message {
   return {
     ...dto,
+    content: decryptContent(dto.content),
     isPinned: dto.isPinned ?? false,
     isStarred: dto.isStarred ?? false,
     attachments: dto.attachments ?? [],
@@ -173,7 +183,7 @@ export function useAllChatsNotifications(chatIds: number[]) {
             const currentUserId = useAuthStore.getState().user?.id
             const activeChatId = useChatStore.getState().activeChatId
 
-            updateLastMessage(event.payload.chatId, event.payload.content, event.payload.createdAt)
+            updateLastMessage(event.payload.chatId, decryptContent(event.payload.content), event.payload.createdAt)
 
             // Show badge only for messages from others in non-active chats
             if (

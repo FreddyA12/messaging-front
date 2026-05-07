@@ -62,6 +62,7 @@ Al terminar cada fase, actualiza la tabla de abajo con los archivos modificados,
 | 10 — Mensajes Temporales | ✅ | `types/chat.ts`, `features/chat/api.ts`, `store/chatStore.ts`, `features/chat/components/MessageBubble.tsx`, `TtlPickerDialog.tsx`, `ChatWindow.tsx` | expiresAt en mensajes, countdown timer, TTL picker dialog, cleanup job en backend, removeMessage en store. TTL selector en input. |
 | 11 — Historias (Stories) | ✅ | `types/story.ts`, `store/storyStore.ts`, `features/stories/api.ts`, `features/stories/components/StoriesBar.tsx`, `StoryViewer.tsx`, `CreateStoryDialog.tsx`, `routes/MainLayout.tsx` | Feed agrupado por usuario, visor full-screen con progreso, texto o imagen/video, 24h TTL, cleanup cada hora en backend. |
 | Fixes & mejoras post-11 | ✅ | `MainLayout.tsx`, `chatStore.ts`, `hooks/useSocket.ts`, `StoriesList.tsx`, `StoriesPanel.tsx`, `StoryPrivacyDialog.tsx`, `features/stories/api.ts`, `SettingsPage.tsx` | Ver detalle abajo. |
+| 12 — Cifrado Afín | ✅ | `src/lib/afin.ts`, `src/store/encryptionStore.ts`, `LoginPage.tsx`, `RegisterPage.tsx`, `authStore.ts`, `ChatWindow.tsx`, `hooks/useSocket.ts`, `features/chat/api.ts` | Ver detalle abajo. |
 
 ---
 
@@ -546,9 +547,46 @@ Para testing y desarrollo, están disponibles los siguientes usuarios:
 ### Avatar en Settings
 - `SettingsPage.tsx`: preview inmediato con `URL.createObjectURL` tras seleccionar foto; mensaje "Foto actualizada" / "Error al subir la foto"
 
+---
+
+## Fase 12 — Detalle de implementación (Cifrado Afín)
+
+### Algoritmo
+- `E(x) = (a·x + b) & 0xFF` byte a byte; resultado codificado como Base64
+- `D(y) = (a⁻¹·(y − b + 256)) & 0xFF` byte a byte; entrada desde Base64
+- `a` debe ser impar y ≥ 3 (todos impares son coprimos con 256 = 2^8)
+- `b` ∈ [0, 255]
+- `modInverse` implementado con Euclides extendido
+
+### Módulo afín (`src/lib/afin.ts`)
+- `modInverse(a, m)`, `isValidKey(a)`, `encryptByte`, `decryptByte`, `encrypt`, `decrypt`, `safeDecrypt`
+- `safeDecrypt` = `decrypt` envuelto en try/catch — devuelve el original si falla (compatibilidad con mensajes pre-cifrado)
+
+### Gestión de clave (`src/store/encryptionStore.ts`)
+- Zustand sin `persist` — la clave vive solo en memoria de la sesión del navegador
+- `setKey(a, b)` valida con `isValidKey` antes de guardar
+- `clearKey()` llamado desde `authStore.clearAuth` vía dynamic import para evitar dependencias circulares
+
+### Flujo de clave
+- Login / registro exitoso → `LoginPage.tsx` / `RegisterPage.tsx` generan `a` aleatorio impar [3,255] y `b` [0,255] → `useEncryptionStore.getState().setKey(a, b)`
+- Logout → `authStore.clearAuth` llama `useEncryptionStore.getState().clearKey()`
+
+### Puntos de cifrado
+- **Envío**: `ChatWindow.tsx` `sendMessage()` — cifra `content` antes de `publish('/app/chat.send', ...)` y antes de `chatApi.editMessage`
+- **Recepción WS**: `useSocket.ts` función `toMessage()` — descifra `content` antes de insertar al store (cubre `useChatSubscription` y `useAllChatsNotifications`)
+- **Historial**: `chatApi.getMessages` — map con `decryptMessage` sobre la respuesta REST
+- Solo el campo `content` se cifra; `type`, `attachments`, `reactions`, etc. no se tocan
+
+### Tests (`src/lib/afin.test.ts`)
+- Round-trip ASCII, multibyte, emojis, edge cases (vacío, un char, cadena larga)
+- Todos los impares [3,255] pasan round-trip
+- `safeDecrypt` devuelve original para texto plano no cifrado
+- Mutation test: byte adulterado → output diferente al original
+
 ## Instrucción para Claude
 
 - No ejecutes comandos de build, compilación, tests ni servidores de desarrollo (`tsc`, `npm run build`, `npm run dev`, `npm test`, etc.) a menos que el usuario lo indique explícitamente.
+- No escribas ni crees archivos de tests bajo ninguna circunstancia a menos que el usuario lo pida explícitamente.
 
 Al acabar cada fase, actualiza obligatoriamente:
 1. La tabla de estado de fases en este `CLAUDE.md`

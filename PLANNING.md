@@ -847,6 +847,22 @@ Spring Boot incluye un SimpleBroker in-memory (`enableSimpleBroker("/topic", "/q
 - Verificar que los BYTEA no se cargan innecesariamente
 - Documentación final y README actualizado
 
+### Fase 12 — Cifrado Afín manual en el frontend (semana 18)
+
+#### Contexto
+El frontend cifra el texto plano con Cifrado Afín antes de enviarlo al backend. El backend **nunca recibe texto plano**; recibe `C1 = Afín(plaintext)`. Al recibir mensajes, el frontend receptor obtiene `C1` del backend y aplica Afín⁻¹ para recuperar el texto. Ver `ENCRYPTION.md` en la raíz del repositorio padre.
+
+#### Implementación — Cifrado Afín manual (sin librerías)
+- Módulo `src/lib/afin.ts` implementado puramente en TypeScript:
+  - `encrypt(plaintext: string, a: number, b: number): string` — aplica `E(x) = (a·x + b) mod 256` byte a byte
+  - `decrypt(ciphertext: string, a: number, b: number): string` — aplica `D(y) = a⁻¹·(y − b) mod 256`
+  - `modInverse(a: number, m: number): number` — inverso modular con algoritmo de Euclides extendido
+  - `isValidKey(a: number): boolean` — verifica que `gcd(a, 256) === 1` (a debe ser impar ≠ 1)
+- La clave `(a, b)` se negocia al inicio de sesión y se guarda en memoria (no en localStorage ni sessionStorage)
+- El texto cifrado se representa como string Base64 para transporte seguro
+- Integración en `ChatWindow` y `chatApi`: todo `content` enviado pasa por `afin.encrypt`; todo `content` recibido pasa por `afin.decrypt`
+- Tests unitarios de ida y vuelta (encrypt → decrypt = identidad) + mutation tests
+
 ---
 
 ## 10. Requerimientos no funcionales
@@ -866,6 +882,7 @@ Spring Boot incluye un SimpleBroker in-memory (`enableSimpleBroker("/topic", "/q
 - CORS configurado solo para `http://localhost:5173` en dev
 - Validación de input con Bean Validation
 - Autorización por rol en endpoints de grupos (solo admin puede eliminar miembros)
+- **Cifrado en cadena (Fase 12):** el frontend aplica Cifrado Afín manualmente (sin librerías) sobre el texto plano antes de enviarlo. El backend nunca ve texto plano; solo recibe y reenvía `C1`. El receptor descifra Afín⁻¹ en el cliente. Ver `ENCRYPTION.md` en la raíz del repositorio padre.
 
 ### Observabilidad
 - Logs estructurados con SLF4J + Logback

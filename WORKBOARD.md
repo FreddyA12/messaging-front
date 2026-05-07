@@ -249,3 +249,42 @@ src/
 - [x] **Ocultar historias**: `StoryPrivacyDialog.tsx` — seleccionar contactos para ocultar tu historia; guarda en backend `PUT /api/stories/privacy`; feed del visor filtra automáticamente
 - [x] **Fix blob media historias**: `StoryViewer` y `StoriesPanel` usan `api.get(..., {responseType:'blob'})` en lugar de `fetch` nativo (corrige URL y JWT)
 - [x] **Fix infinite loop**: `chatIds` memoizado con `useMemo` en `MainLayout.tsx` para evitar re-renders infinitos al usar Zustand selector con `.map()`
+
+---
+
+## FASE 12 — Cifrado Afín manual (sin librerías)
+
+> El frontend cifra el plaintext con Afín antes de enviarlo. El backend recibe `C1` opaco. Al recibir mensajes, el cliente receptor descifra Afín⁻¹. Ver `ENCRYPTION.md` en la raíz del repo padre.
+
+### 12.1 — Módulo afin.ts
+**Estado:** `[x]`
+
+- [x] `src/lib/afin.ts`:
+  - `modInverse(a: number, m: number): number` — Euclides extendido; lanza si no existe inverso
+  - `isValidKey(a: number): boolean` — `a` impar y `gcd(a, 256) === 1`
+  - `encryptByte(x: number, a: number, b: number): number` — `(a*x + b) & 0xFF`
+  - `decryptByte(y: number, aInv: number, b: number): number` — `(aInv*(y - b + 256)) & 0xFF`
+  - `encrypt(plaintext: string, a: number, b: number): string` — codifica cada byte, retorna Base64
+  - `decrypt(ciphertext: string, a: number, b: number): string` — decodifica Base64, aplica decrypt byte a byte
+  - `safeDecrypt` — wrapper con try/catch para compatibilidad con mensajes pre-cifrado
+- [x] Tests unitarios: `encrypt(decrypt(x)) === x` para ASCII, emojis y caracteres multibyte + mutation tests (`src/lib/afin.test.ts`)
+
+### 12.2 — Gestión de clave de sesión
+**Estado:** `[x]`
+**Depende de:** 12.1
+
+- [x] `src/store/encryptionStore.ts` (Zustand, sin persist):
+  - `a: number`, `b: number` — valores de la clave Afín
+  - `setKey(a, b)` — valida con `isValidKey` antes de guardar
+  - `clearKey()` — limpia al hacer logout
+- [x] Al hacer login exitoso: generar `a` y `b` aleatorios válidos y guardar en el store (`LoginPage.tsx`, `RegisterPage.tsx`)
+- [x] Al hacer logout: llamar `clearKey()` desde `authStore.clearAuth`
+
+### 12.3 — Integración en envío y recepción de mensajes
+**Estado:** `[x]`
+**Depende de:** 12.1, 12.2
+
+- [x] `src/features/chat/components/ChatWindow.tsx` — cifrar `content` antes del `publish('/app/chat.send')` y antes de `chatApi.editMessage`
+- [x] `src/hooks/useSocket.ts` — descifrar `content` en `toMessage()` (cubre `MESSAGE_NEW` en `useChatSubscription` y `useAllChatsNotifications`)
+- [x] `src/features/chat/api.ts` — descifrar cada `content` en `getMessages`
+- [x] Solo `content` pasa por cifrado — type, attachments, reactions y demás campos no se tocan

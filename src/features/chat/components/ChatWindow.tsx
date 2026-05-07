@@ -20,6 +20,8 @@ import { MediaGallery } from '../../media/components/MediaGallery'
 import { GroupInfoPanel } from './GroupInfoPanel'
 import { TtlPickerDialog } from './TtlPickerDialog'
 import { useCallStore } from '../../../store/callStore'
+import { useEncryptionStore } from '../../../store/encryptionStore'
+import { encrypt } from '../../../lib/afin'
 import type { CallType } from '../../../types/call'
 
 const TYPING_STOP_DELAY = 3000
@@ -270,8 +272,12 @@ export function ChatWindow() {
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
     stopTyping()
 
+    const { a, b } = useEncryptionStore.getState()
+    const encryptContent = (text: string) =>
+      text && a !== null && b !== null ? encrypt(text, a, b) : text
+
     if (editingMessage) {
-      await chatApi.editMessage(editingMessage.id, content)
+      await chatApi.editMessage(editingMessage.id, encryptContent(content))
       setEditingMessage(null)
     } else {
       let attachmentIds: number[] | undefined
@@ -292,7 +298,7 @@ export function ChatWindow() {
 
       await publish('/app/chat.send', {
         chatId: activeChatId,
-        content: content || null,
+        content: content ? encryptContent(content) : null,
         type: pendingAttach?.type ?? 'TEXT',
         replyToId: replyTo?.id,
         attachmentIds,

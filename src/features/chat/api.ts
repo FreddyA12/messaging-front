@@ -1,5 +1,13 @@
 import { api } from '../../lib/axios'
+import { useEncryptionStore } from '../../store/encryptionStore'
+import { safeDecrypt } from '../../lib/afin'
 import type { ChatDTO, GroupMemberDTO, MessageDTO, SendMessageRequest } from '../../types/chat'
+
+function decryptMessage(msg: MessageDTO): MessageDTO {
+  const { a, b } = useEncryptionStore.getState()
+  if (a === null || b === null || !msg.content) return msg
+  return { ...msg, content: safeDecrypt(msg.content, a, b) }
+}
 
 export interface ForwardRequest {
   chatIds: number[]
@@ -21,7 +29,7 @@ export const chatApi = {
   getMessages: (chatId: number, cursor?: string, limit = 50) =>
     api
       .get<MessageDTO[]>(`/api/chats/${chatId}/messages`, { params: { cursor, limit } })
-      .then((r) => r.data),
+      .then((r) => r.data.map(decryptMessage)),
 
   sendMessage: (data: SendMessageRequest) =>
     api.post<MessageDTO>('/api/messages', data).then((r) => r.data),
