@@ -9,10 +9,16 @@ export function getStompClient(): Client {
   if (!stompClient) {
     stompClient = new Client({
       webSocketFactory: () => new SockJS(`${window.location.origin}/ws`),
-      connectHeaders: {
-        Authorization: `Bearer ${useAuthStore.getState().accessToken ?? ''}`,
+      // Read token dynamically so reconnects after token refresh work correctly
+      connectHeaders: {},
+      beforeConnect: async () => {
+        const token = useAuthStore.getState().accessToken ?? ''
+        stompClient!.connectHeaders = { Authorization: `Bearer ${token}` }
       },
       reconnectDelay: 3000,
+      // Heartbeat keeps the nginx proxy from closing idle WebSocket connections
+      heartbeatOutgoing: 20000,
+      heartbeatIncoming: 20000,
       onStompError: (frame: IFrame) => {
         console.error('STOMP error', frame)
       },

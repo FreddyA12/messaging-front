@@ -6,8 +6,11 @@
 
 @layer base {
   :root {
-    /* Olive green bubbles */
-    --bubble-outgoing: #dde8c8;
+    /* Bubble palette vars — set by App.tsx ThemeProvider per palette choice */
+    --bubble-outgoing-lm: #dde8c8;
+    --bubble-outgoing-dm: #3d5225;
+
+    --bubble-outgoing: var(--bubble-outgoing-lm);
     --bubble-incoming: #ffffff;
 
     /* Brand palette */
@@ -19,10 +22,19 @@
     --color-border:       rgba(122, 144, 72, 0.18);
     --color-text:         #242d16;
     --color-text-muted:   #7a8a6a;
+
+    /* Layout */
+    --bg-page:            linear-gradient(155deg, #f0f3e6 0%, #e8ecda 40%, #f5f6f0 100%);
+    --bg-sidebar:         rgba(255, 255, 255, 0.72);
+    --bg-sidebar-header:  rgba(255, 255, 255, 0.60);
+    --bg-card:            #ffffff;
+    --bg-hover:           rgba(122, 144, 72, 0.07);
+    --border-subtle:      rgba(122, 144, 72, 0.12);
+    --border-medium:      rgba(122, 144, 72, 0.18);
   }
 
   .dark {
-    --bubble-outgoing: #3d5225;
+    --bubble-outgoing: var(--bubble-outgoing-dm);
     --bubble-incoming: #232b1a;
 
     --color-surface:    #1a1f12;
@@ -30,6 +42,15 @@
     --color-border:     rgba(122, 144, 72, 0.15);
     --color-text:       #e8ecdc;
     --color-text-muted: #8a9a7a;
+
+    /* Layout */
+    --bg-page:           #0e1509;
+    --bg-sidebar:        rgba(16, 22, 10, 0.95);
+    --bg-sidebar-header: rgba(20, 28, 13, 0.90);
+    --bg-card:           #1a2210;
+    --bg-hover:          rgba(122, 144, 72, 0.12);
+    --border-subtle:     rgba(122, 144, 72, 0.14);
+    --border-medium:     rgba(122, 144, 72, 0.18);
   }
 
   html {

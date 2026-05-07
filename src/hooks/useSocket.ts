@@ -32,6 +32,9 @@ function toMessage(dto: MessageDTO): Message {
     content: decryptContent(dto.content),
     isPinned: dto.isPinned ?? false,
     isStarred: dto.isStarred ?? false,
+    reactions: dto.reactions ?? [],
+    readBy: dto.readBy ?? [],
+    deliveredTo: dto.deliveredTo ?? [],
     attachments: dto.attachments ?? [],
     linkPreviews: dto.linkPreviews ?? [],
     replyTo: dto.replyTo ? toMessage(dto.replyTo) : null,
@@ -104,7 +107,7 @@ export function useChatSubscription(chatId: number | null) {
             case 'MESSAGE_NEW': {
               const newMsg = toMessage(event.payload)
               addMessage(newMsg)
-              updateLastMessage(event.payload.chatId, event.payload.content, event.payload.createdAt)
+              updateLastMessage(event.payload.chatId, newMsg.content, event.payload.createdAt)
               // Auto-mark as read if the chat is active (message from someone else)
               if (event.payload.senderId !== useAuthStore.getState().user?.id) {
                 chatApi.markRead(event.payload.id).catch(() => {})
@@ -112,7 +115,7 @@ export function useChatSubscription(chatId: number | null) {
               break
             }
             case 'MESSAGE_EDITED':
-              editMessage(event.payload.messageId, event.payload.newContent, event.payload.editedAt)
+              editMessage(event.payload.messageId, decryptContent(event.payload.newContent) ?? '', event.payload.editedAt)
               break
             case 'MESSAGE_DELETED':
               deleteMessage(event.payload.messageId, event.payload.forEveryone)

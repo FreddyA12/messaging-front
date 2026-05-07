@@ -32,6 +32,8 @@ export interface Message {
   attachments: AttachmentDTO[]
   linkPreviews: LinkPreviewDTO[]
   expiresAt: string | null
+  viewOnce: boolean
+  viewedByMe: boolean
 }
 
 interface PresenceEntry {
@@ -78,6 +80,7 @@ interface ChatState {
   setStarredMessages: (messages: Message[]) => void
   toggleStarred: (messageId: number, isStarred: boolean) => void
   removeMessage: (messageId: number) => void
+  markViewedOnce: (messageId: number) => void
 }
 
 function mapAllMessages(
@@ -250,4 +253,10 @@ export const useChatStore = create<ChatState>((set) => ({
       }
       return { messages: result }
     }),
+  markViewedOnce: (messageId) =>
+    set((s) => ({
+      messages: mapAllMessages(s.messages, (m) =>
+        m.id === messageId ? { ...m, viewedByMe: true } : m,
+      ),
+    })),
 }))

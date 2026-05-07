@@ -23,6 +23,7 @@ import { useCallStore } from '../../../store/callStore'
 import { useEncryptionStore } from '../../../store/encryptionStore'
 import { encrypt } from '../../../lib/afin'
 import type { CallType } from '../../../types/call'
+import { UserAvatar } from '../../../components/UserAvatar'
 
 const TYPING_STOP_DELAY = 3000
 
@@ -539,7 +540,7 @@ export function ChatWindow() {
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        gap: '14px', background: 'linear-gradient(155deg, #f0f3e6 0%, #f5f6f0 100%)',
+        gap: '14px', background: 'var(--bg-page)',
       }}>
         <div style={{
           width: '72px', height: '72px', borderRadius: '22px',
@@ -551,7 +552,7 @@ export function ChatWindow() {
               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </div>
-        <p style={{ fontSize: '13px', color: '#8a9a7a', fontWeight: 500 }}>Selecciona un chat para comenzar</p>
+        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', fontWeight: 500 }}>Selecciona un chat para comenzar</p>
       </div>
     )
   }
@@ -563,8 +564,8 @@ export function ChatWindow() {
         {showSearch ? (
           <div style={{
             padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
-            background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(12px)',
-            borderBottom: '1px solid rgba(122,144,72,0.14)',
+            background: 'var(--bg-sidebar)', backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid var(--border-subtle)',
           }}>
             <div style={{ flex: 1, position: 'relative' }}>
               <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9aaa82' }}
@@ -583,8 +584,8 @@ export function ChatWindow() {
                   width: '100%', paddingLeft: '38px', paddingRight: '16px',
                   paddingTop: '8px', paddingBottom: '8px',
                   fontSize: '13px', borderRadius: '12px',
-                  background: '#f0f3e6', border: '1.5px solid rgba(122,144,72,0.2)',
-                  color: '#242d16', outline: 'none',
+                  background: 'var(--color-muted)', border: '1.5px solid var(--color-border)',
+                  color: 'var(--color-text)', outline: 'none',
                   fontFamily: "'Poppins', system-ui, sans-serif",
                 }}
               />
@@ -603,24 +604,21 @@ export function ChatWindow() {
         ) : (
           <div style={{
             padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0,
-            background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)',
-            borderBottom: '1px solid rgba(122,144,72,0.14)',
+            background: 'var(--bg-sidebar)', backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid var(--border-subtle)',
           }}>
             {/* Avatar */}
-            <div style={{
-              width: '40px', height: '40px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #7a9048, #91a662)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontWeight: 600, fontSize: '15px', flexShrink: 0,
-              boxShadow: '0 2px 10px rgba(122,144,72,0.22)',
-            }}>
-              {activeChat.name[0].toUpperCase()}
-            </div>
+            <UserAvatar
+              userId={activeChat.type === 'PRIVATE' ? activeChat.otherUserId : undefined}
+              name={activeChat.name}
+              size={40}
+              style={{ boxShadow: '0 2px 10px rgba(122,144,72,0.22)' }}
+            />
             <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontWeight: 600, fontSize: '14px', color: '#242d16', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <p style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {activeChat.name}
               </p>
-              <p style={{ fontSize: '11px', color: '#8a9a7a' }}>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                 {activeChat.type === 'GROUP'
                   ? 'Grupo'
                   : otherPresence?.isOnline
@@ -952,9 +950,9 @@ export function ChatWindow() {
         {/* Input */}
         {!showSearch && (
           <div style={{
-            padding: '10px 16px 12px', borderTop: '1px solid rgba(122,144,72,0.14)',
+            padding: '10px 16px 12px', borderTop: '1px solid var(--border-subtle)',
             display: 'flex', alignItems: 'flex-end', gap: '8px', flexShrink: 0,
-            background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)',
+            background: 'var(--bg-sidebar)', backdropFilter: 'blur(12px)',
           }}>
             <div ref={attachBtnRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button
@@ -1037,8 +1035,8 @@ export function ChatWindow() {
               style={{
                 flex: 1, resize: 'none', borderRadius: '18px',
                 padding: '10px 16px', fontSize: '13px',
-                background: '#f0f3e6', border: '1.5px solid rgba(122,144,72,0.2)',
-                color: '#242d16', outline: 'none',
+                background: 'var(--color-muted)', border: '1.5px solid var(--color-border)',
+                color: 'var(--color-text)', outline: 'none',
                 maxHeight: '128px', overflowY: 'auto',
                 fontFamily: "'Poppins', system-ui, sans-serif",
                 transition: 'border-color 0.2s ease',

@@ -89,6 +89,8 @@ export interface MessageDTO {
   attachments?: AttachmentDTO[]
   linkPreviews?: LinkPreviewDTO[]
   expiresAt?: string | null
+  viewOnce?: boolean
+  viewedByMe?: boolean
 }
 
 export interface SendMessageRequest {
@@ -98,6 +100,7 @@ export interface SendMessageRequest {
   replyToId?: number
   attachmentIds?: number[]
   ttlSeconds?: number
+  viewOnce?: boolean
 }
 
 export interface MessageNewEvent {

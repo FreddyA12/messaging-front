@@ -28,15 +28,12 @@ export function useTheme() {
     }
   }, [theme])
 
-  // Apply palette as CSS custom properties
+  // Apply palette — only affects chat bubble colors, not global chrome
   useEffect(() => {
     const p = PALETTES[palette]
     const root = document.documentElement
-    root.style.setProperty('--color-primary',       p.primary)
-    root.style.setProperty('--color-primary-dark',  p.dark)
-    root.style.setProperty('--color-primary-light', p.light)
-    root.style.setProperty('--color-primary-swatch', p.swatch)
-    root.style.setProperty('--bubble-outgoing',     p.light)
+    root.style.setProperty('--bubble-outgoing-lm', p.light)
+    root.style.setProperty('--bubble-outgoing-dm', p.darkBubble)
   }, [palette])
 
   // Apply font size class
