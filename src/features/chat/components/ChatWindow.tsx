@@ -16,9 +16,12 @@ import { StarredMessagesView } from './StarredMessagesView'
 import { ForwardDialog } from './ForwardDialog'
 import { AttachMenu, type AttachType } from './AttachMenu'
 import { AttachPreview } from './AttachPreview'
+import { AudioRecorder } from './AudioRecorder'
+import { CameraCapture } from './CameraCapture'
 import { MediaGallery } from '../../media/components/MediaGallery'
 import { GroupInfoPanel } from './GroupInfoPanel'
 import { TtlPickerDialog } from './TtlPickerDialog'
+import { CreatePollDialog } from './CreatePollDialog'
 import { useCallStore } from '../../../store/callStore'
 import { useEncryptionStore } from '../../../store/encryptionStore'
 import { encrypt } from '../../../lib/afin'
@@ -49,7 +52,11 @@ function highlightText(text: string, query: string): React.ReactNode {
   )
 }
 
-export function ChatWindow() {
+interface ChatWindowProps {
+  onBack?: () => void
+}
+
+export function ChatWindow({ onBack }: ChatWindowProps) {
   const activeChatId = useChatStore((s) => s.activeChatId)
   const chats = useChatStore((s) => s.chats)
   const messages = useChatStore((s) => s.messages)
@@ -100,6 +107,10 @@ export function ChatWindow() {
     previewUrl: string | null
   } | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [viewOnce, setViewOnce] = useState(false)
+  const [showAudioRecorder, setShowAudioRecorder] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
+  const [showPollDialog, setShowPollDialog] = useState(false)
   const chatBg = useAppearanceStore((s) => s.chatBackground)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -160,6 +171,9 @@ export function ChatWindow() {
       setShowGroupInfo(false)
       setNewMessageTtl(null)
       setShowTtlMenu(false)
+      setShowAudioRecorder(false)
+      setShowCamera(false)
+      setShowPollDialog(false)
       cancelAttach()
       inputRef.current?.focus()
     }
@@ -245,6 +259,34 @@ export function ChatWindow() {
     }
   }, [activeChatId, currentUser])
 
+  const handleAudioReady = (file: File) => {
+    setShowAudioRecorder(false)
+    handleFileSelected(file, 'AUDIO')
+  }
+
+  const handleCameraSend = async (file: File, type: AttachType, caption: string, voViewOnce: boolean) => {
+    setShowCamera(false)
+    if (!activeChatId) return
+    const { a, b } = useEncryptionStore.getState()
+    const encryptContent = (text: string) =>
+      text && a !== null && b !== null ? encrypt(text, a, b) : text
+    setUploadProgress(0)
+    try {
+      const res = await mediaApi.uploadFile(file, (pct) => setUploadProgress(pct))
+      setUploadProgress(null)
+      await publish('/app/chat.send', {
+        chatId: activeChatId,
+        content: caption.trim() ? encryptContent(caption.trim()) : null,
+        type,
+        attachmentIds: [res.attachmentId],
+        ttlSeconds: newMessageTtl ?? undefined,
+        viewOnce: voViewOnce ? true : undefined,
+      })
+    } catch {
+      setUploadProgress(null)
+    }
+  }
+
   const handleFileSelected = async (file: File, type: AttachType) => {
     let processedFile = file
     let previewUrl: string | null = null
@@ -263,6 +305,7 @@ export function ChatWindow() {
     if (pendingAttach?.previewUrl) URL.revokeObjectURL(pendingAttach.previewUrl)
     setPendingAttach(null)
     setUploadProgress(null)
+    setViewOnce(false)
   }
 
   const sendMessage = async () => {
@@ -304,7 +347,9 @@ export function ChatWindow() {
         replyToId: replyTo?.id,
         attachmentIds,
         ttlSeconds: newMessageTtl ?? undefined,
+        viewOnce: attachmentIds && viewOnce ? true : undefined,
       })
+      setViewOnce(false)
       setReplyTo(null)
     }
 
@@ -607,6 +652,20 @@ export function ChatWindow() {
             background: 'var(--bg-sidebar)', backdropFilter: 'blur(12px)',
             borderBottom: '1px solid var(--border-subtle)',
           }}>
+            {/* Back button (mobile only) */}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="md:hidden w-8 h-8 flex items-center justify-center rounded-full text-gray-400
+                           hover:text-primary-600 hover:bg-primary-50 transition-colors shrink-0"
+                title="Volver"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+
             {/* Avatar */}
             <UserAvatar
               userId={activeChat.type === 'PRIVATE' ? activeChat.otherUserId : undefined}
@@ -917,6 +976,8 @@ export function ChatWindow() {
             type={pendingAttach.type}
             previewUrl={pendingAttach.previewUrl}
             progress={uploadProgress}
+            viewOnce={viewOnce}
+            onToggleViewOnce={() => setViewOnce((v) => !v)}
             onCancel={cancelAttach}
           />
         )}
@@ -947,13 +1008,22 @@ export function ChatWindow() {
           })()
         )}
 
-        {/* Input */}
-        {!showSearch && (
+        {/* Audio recorder — replaces the full input bar while active */}
+        {!showSearch && showAudioRecorder && (
+          <AudioRecorder
+            onAudioReady={handleAudioReady}
+            onCancel={() => setShowAudioRecorder(false)}
+          />
+        )}
+
+        {/* Input bar */}
+        {!showSearch && !showAudioRecorder && (
           <div style={{
             padding: '10px 16px 12px', borderTop: '1px solid var(--border-subtle)',
-            display: 'flex', alignItems: 'flex-end', gap: '8px', flexShrink: 0,
+            display: 'flex', alignItems: 'flex-end', gap: '6px', flexShrink: 0,
             background: 'var(--bg-sidebar)', backdropFilter: 'blur(12px)',
           }}>
+            {/* Left group: attach + camera */}
             <div ref={attachBtnRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 onClick={() => setShowAttachMenu((v) => !v)}
@@ -973,16 +1043,68 @@ export function ChatWindow() {
                 />
               )}
             </div>
-            {/* TTL selector */}
+
+            <button
+              onClick={() => setShowCamera(true)}
+              className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400
+                         hover:text-primary-500 hover:bg-primary-50 transition-colors shrink-0"
+              title="Cámara"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+
+            {/* Poll button (groups only) */}
+            {activeChat.type === 'GROUP' && (
+              <button
+                onClick={() => setShowPollDialog(true)}
+                className="w-9 h-9 flex items-center justify-center rounded-full text-gray-400
+                           hover:text-primary-500 hover:bg-primary-50 transition-colors shrink-0"
+                title="Crear encuesta"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </button>
+            )}
+
+            {/* Text input */}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onInput={handleInput}
+              placeholder="Escribe un mensaje..."
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', borderRadius: '18px',
+                padding: '10px 16px', fontSize: '13px',
+                background: 'var(--color-muted)', border: '1.5px solid var(--color-border)',
+                color: 'var(--color-text)', outline: 'none',
+                maxHeight: '128px', overflowY: 'auto',
+                fontFamily: "'Poppins', system-ui, sans-serif",
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(122,144,72,0.5)' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(122,144,72,0.2)' }}
+            />
+
+            {/* Right group: TTL + mic/send */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 onClick={() => setShowTtlMenu((v) => !v)}
-                className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors relative
                   ${newMessageTtl
                     ? 'text-orange-500 bg-orange-50'
                     : 'text-gray-400 hover:text-primary-500 hover:bg-primary-50'
                   }`}
-                title={newMessageTtl ? 'Autodestrucción activa' : 'Autodestrucción del mensaje'}
+                title={newMessageTtl ? 'Autodestrucción activa' : 'Autodestrucción'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -994,7 +1116,7 @@ export function ChatWindow() {
               </button>
               {showTtlMenu && (
                 <div
-                  className="absolute bottom-12 left-0 z-30 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 min-w-[180px]"
+                  className="absolute bottom-12 right-0 z-30 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 min-w-[180px]"
                   onMouseLeave={() => setShowTtlMenu(false)}
                 >
                   <p className="px-4 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
@@ -1024,50 +1146,43 @@ export function ChatWindow() {
               )}
             </div>
 
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onInput={handleInput}
-              placeholder="Escribe un mensaje..."
-              rows={1}
-              style={{
-                flex: 1, resize: 'none', borderRadius: '18px',
-                padding: '10px 16px', fontSize: '13px',
-                background: 'var(--color-muted)', border: '1.5px solid var(--color-border)',
-                color: 'var(--color-text)', outline: 'none',
-                maxHeight: '128px', overflowY: 'auto',
-                fontFamily: "'Poppins', system-ui, sans-serif",
-                transition: 'border-color 0.2s ease',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(122,144,72,0.5)' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(122,144,72,0.2)' }}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!input.trim() && !pendingAttach}
-              style={{
-                width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
-                background: 'linear-gradient(135deg, #7a9048, #637839)',
-                border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', transition: 'all 0.2s ease',
-                boxShadow: '0 3px 12px rgba(122,144,72,0.3)',
-                opacity: (!input.trim() && !pendingAttach) ? 0.4 : 1,
-              }}
-              title={editingMessage ? 'Guardar cambios' : 'Enviar'}
-            >
-              {editingMessage ? (
+            {/* Mic (when no text/attachment) or Send button */}
+            {input.trim() || pendingAttach || editingMessage ? (
+              <button
+                onClick={sendMessage}
+                style={{
+                  width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+                  background: 'linear-gradient(135deg, #7a9048, #637839)',
+                  border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', transition: 'all 0.2s ease',
+                  boxShadow: '0 3px 12px rgba(122,144,72,0.3)',
+                }}
+                title={editingMessage ? 'Guardar cambios' : 'Enviar'}
+              >
+                {editingMessage ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 rotate-90" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAudioRecorder(true)}
+                className="w-10 h-10 flex items-center justify-center rounded-full text-gray-400
+                           hover:text-primary-600 hover:bg-primary-50 transition-colors shrink-0"
+                title="Grabar audio"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
-              ) : (
-                <svg className="w-5 h-5 rotate-90" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
-              )}
-            </button>
+              </button>
+            )}
           </div>
         )}
 
@@ -1123,6 +1238,14 @@ export function ChatWindow() {
             onClose={() => setTtlMessage(null)}
           />
         )}
+
+        {/* Create poll dialog */}
+        {showPollDialog && activeChatId && (
+          <CreatePollDialog
+            chatId={activeChatId}
+            onClose={() => setShowPollDialog(false)}
+          />
+        )}
       </div>
 
       {/* Starred messages panel */}
@@ -1152,6 +1275,14 @@ export function ChatWindow() {
           chatName={activeChat.name}
           description={undefined}
           onClose={() => setShowGroupInfo(false)}
+        />
+      )}
+
+      {/* Camera capture modal */}
+      {showCamera && (
+        <CameraCapture
+          onSend={handleCameraSend}
+          onClose={() => setShowCamera(false)}
         />
       )}
     </div>

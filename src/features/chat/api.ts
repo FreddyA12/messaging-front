@@ -1,12 +1,26 @@
 import { api } from '../../lib/axios'
 import { useEncryptionStore } from '../../store/encryptionStore'
 import { safeDecrypt } from '../../lib/afin'
-import type { ChatDTO, GroupMemberDTO, MessageDTO, SendMessageRequest } from '../../types/chat'
+import type { ChatDTO, GroupMemberDTO, MessageDTO, PollDTO, SendMessageRequest } from '../../types/chat'
 
 function decryptMessage(msg: MessageDTO): MessageDTO {
   const { a, b } = useEncryptionStore.getState()
-  if (a === null || b === null || !msg.content) return msg
-  return { ...msg, content: safeDecrypt(msg.content, a, b) }
+  const decrypted = a !== null && b !== null && msg.content
+    ? { ...msg, content: safeDecrypt(msg.content, a, b) }
+    : msg
+  return {
+    ...decrypted,
+    viewOnce: decrypted.viewOnce ?? false,
+    viewedByMe: decrypted.viewedByMe ?? false,
+    isPinned: decrypted.isPinned ?? false,
+    isStarred: decrypted.isStarred ?? false,
+    reactions: decrypted.reactions ?? [],
+    readBy: decrypted.readBy ?? [],
+    deliveredTo: decrypted.deliveredTo ?? [],
+    attachments: decrypted.attachments ?? [],
+    linkPreviews: decrypted.linkPreviews ?? [],
+    expiresAt: decrypted.expiresAt ?? null,
+  }
 }
 
 export interface ForwardRequest {
@@ -67,6 +81,9 @@ export const chatApi = {
   setMessageTtl: (id: number, ttlSeconds: number) =>
     api.patch(`/api/messages/${id}/ttl`, null, { params: { ttlSeconds } }),
 
+  markViewedOnce: (id: number) =>
+    api.post(`/api/messages/${id}/view-once`).catch(() => {}),
+
   getPinnedMessages: (chatId: number) =>
     api.get<MessageDTO[]>(`/api/chats/${chatId}/pinned`).then((r) => r.data),
 
@@ -109,4 +126,15 @@ export const chatApi = {
 
   exportChat: (chatId: number) =>
     api.get(`/api/chats/${chatId}/export`, { responseType: 'blob' }).then((r) => r.data as Blob),
+}
+
+export const pollsApi = {
+  create: (chatId: number, question: string, options: string[], allowsMultiple: boolean) =>
+    api.post<MessageDTO>('/api/polls', { chatId, question, options, allowsMultiple }).then((r) => r.data),
+
+  vote: (pollId: number, optionId: number) =>
+    api.post<PollDTO>(`/api/polls/${pollId}/vote`, { optionId }).then((r) => r.data),
+
+  removeVote: (pollId: number, optionId: number) =>
+    api.delete<PollDTO>(`/api/polls/${pollId}/vote/${optionId}`).then((r) => r.data),
 }

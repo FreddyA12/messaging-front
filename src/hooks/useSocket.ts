@@ -39,6 +39,8 @@ function toMessage(dto: MessageDTO): Message {
     linkPreviews: dto.linkPreviews ?? [],
     replyTo: dto.replyTo ? toMessage(dto.replyTo) : null,
     expiresAt: dto.expiresAt ?? null,
+    viewOnce: dto.viewOnce ?? false,
+    viewedByMe: dto.viewedByMe ?? false,
   }
 }
 
@@ -92,6 +94,7 @@ export function useChatSubscription(chatId: number | null) {
   const markRead = useChatStore((s) => s.markRead)
   const setTyping = useChatStore((s) => s.setTyping)
   const setPinned = useChatStore((s) => s.setPinned)
+  const updateMessagePoll = useChatStore((s) => s.updateMessagePoll)
 
   useEffect(() => {
     if (!chatId) return
@@ -131,6 +134,9 @@ export function useChatSubscription(chatId: number | null) {
               if (chatId) setPinned(pinEvent.payload.messageId, chatId, pinEvent.payload.isPinned)
               break
             }
+            case 'POLL_UPDATED':
+              updateMessagePoll(event.payload.messageId, event.payload.poll)
+              break
           }
         })
 
@@ -157,7 +163,7 @@ export function useChatSubscription(chatId: number | null) {
       typingSub?.unsubscribe()
       readSub?.unsubscribe()
     }
-  }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping, setPinned])
+  }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping, setPinned, updateMessagePoll])
 }
 
 /**

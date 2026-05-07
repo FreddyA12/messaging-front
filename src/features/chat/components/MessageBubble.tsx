@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react'
 import { useChatStore, type Message } from '../../../store/chatStore'
+import { chatApi } from '../api'
 import { ImageBubble } from './ImageBubble'
 import { VideoBubble } from './VideoBubble'
 import { AudioBubble } from './AudioBubble'
 import { DocumentBubble } from './DocumentBubble'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { CallMessageBubble } from './CallMessageBubble'
+import { PollBubble } from './PollBubble'
 
 interface MessageBubbleProps {
   message: Message
@@ -292,16 +294,45 @@ export function MessageBubble({
           {message.attachments && message.attachments.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-1">
               {message.attachments.map((att) => {
-                if (att.type === 'IMAGE') return <ImageBubble key={att.id} attachment={att} />
-                if (att.type === 'VIDEO') return <VideoBubble key={att.id} attachment={att} />
+                if (att.type === 'IMAGE') return (
+                  <ImageBubble
+                    key={att.id}
+                    attachment={att}
+                    viewOnce={message.viewOnce}
+                    viewedByMe={message.viewedByMe}
+                    isOwn={isOwn}
+                    onView={() => {
+                      useChatStore.getState().markViewedOnce(message.id)
+                      chatApi.markViewedOnce(message.id)
+                    }}
+                  />
+                )
+                if (att.type === 'VIDEO') return (
+                  <VideoBubble
+                    key={att.id}
+                    attachment={att}
+                    viewOnce={message.viewOnce}
+                    viewedByMe={message.viewedByMe}
+                    isOwn={isOwn}
+                    onView={() => {
+                      useChatStore.getState().markViewedOnce(message.id)
+                      chatApi.markViewedOnce(message.id)
+                    }}
+                  />
+                )
                 if (att.type === 'AUDIO') return <AudioBubble key={att.id} attachment={att} isOwn={isOwn} />
                 return <DocumentBubble key={att.id} attachment={att} isOwn={isOwn} />
               })}
             </div>
           )}
 
+          {/* Poll */}
+          {message.type === 'POLL' && message.poll && (
+            <PollBubble messageId={message.id} poll={message.poll} isOwn={isOwn} />
+          )}
+
           {/* Content */}
-          {message.content && (
+          {message.content && message.type !== 'POLL' && (
             <p className="text-sm whitespace-pre-wrap break-words leading-snug">
               {message.content}
             </p>

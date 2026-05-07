@@ -294,10 +294,10 @@ function ChatsSection() {
   const previewFontSize = fontSize === 'small' ? 12 : fontSize === 'large' ? 16 : 14
 
   return (
-    <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
+    <div className="settings-chats-cols" style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
 
       {/* ── Left column ── */}
-      <div style={{ flex: '0 0 55%', display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+      <div className="settings-chats-left" style={{ flex: '0 0 55%', display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
 
         {/* Theme */}
         <CardSection title="Tema">
@@ -328,7 +328,7 @@ function ChatsSection() {
 
         {/* Patterned backgrounds */}
         <CardSection title="Fondo del chat">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 12 }}>
             {PATTERN_BACKGROUNDS.map(key => {
               const val = CHAT_BACKGROUNDS[key as ChatBg]
               return (
@@ -594,13 +594,34 @@ export function SettingsPage() {
 
   return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');`}</style>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Poppins',system-ui,sans-serif", background: c.pageBg }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @media (max-width: 767px) {
+          .settings-root { flex-direction: column !important; }
+          .settings-sidebar {
+            width: 100% !important; flex-shrink: 0;
+            flex-direction: row !important; overflow-x: auto; overflow-y: hidden;
+            border-right: none !important; border-bottom: 1px solid rgba(122,144,72,0.15);
+          }
+          .settings-sidebar-header { display: none !important; }
+          .settings-sidebar-usercard { display: none !important; }
+          .settings-sidebar-nav {
+            flex: none !important; flex-direction: row !important; padding: 0 !important;
+            gap: 0 !important; overflow-x: auto; white-space: nowrap;
+          }
+          .settings-sidebar-nav button { border-radius: 0 !important; padding: 10px 14px !important; font-size: 12px !important; width: auto !important; }
+          .settings-sidebar-logout { display: none !important; }
+          .settings-main { padding: 20px 16px !important; }
+          .settings-chats-cols { flex-direction: column !important; gap: 20px !important; }
+          .settings-chats-left { flex: none !important; width: 100% !important; }
+        }
+      `}</style>
+      <div className="settings-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Poppins',system-ui,sans-serif", background: c.pageBg }}>
 
         {/* ── Sidebar ── */}
-        <aside style={{ width: 252, flexShrink: 0, display: 'flex', flexDirection: 'column', background: c.sidebarBg, backdropFilter: 'blur(20px)', borderRight: `1px solid ${c.sidebarBorder}` }}>
+        <aside className="settings-sidebar" style={{ width: 252, flexShrink: 0, display: 'flex', flexDirection: 'column', background: c.sidebarBg, backdropFilter: 'blur(20px)', borderRight: `1px solid ${c.sidebarBorder}` }}>
           {/* Back + title */}
-          <div style={{ padding: '16px 18px 12px', borderBottom: `1px solid ${c.borderSoft}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="settings-sidebar-header" style={{ padding: '16px 18px 12px', borderBottom: `1px solid ${c.borderSoft}`, display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.textSub, padding: '6px 8px', borderRadius: 10, display: 'flex', alignItems: 'center', transition: 'background .15s' }}>
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             </button>
@@ -608,7 +629,7 @@ export function SettingsPage() {
           </div>
 
           {/* User mini card */}
-          <div style={{ padding: '14px 18px', borderBottom: `1px solid ${c.borderSoft}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="settings-sidebar-usercard" style={{ padding: '14px 18px', borderBottom: `1px solid ${c.borderSoft}`, display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,var(--color-primary,#7a9048),#91a662)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 18, boxShadow: '0 3px 12px rgba(122,144,72,0.3)', flexShrink: 0 }}>
               {user?.name?.[0]?.toUpperCase()}
             </div>
@@ -619,7 +640,7 @@ export function SettingsPage() {
           </div>
 
           {/* Nav */}
-          <nav style={{ flex: 1, padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <nav className="settings-sidebar-nav" style={{ flex: 1, padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
             {NAV.map(item => (
               <button key={item.id} onClick={() => setActive(item.id)} style={{
                 display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 13,
@@ -639,7 +660,7 @@ export function SettingsPage() {
           </nav>
 
           {/* Logout */}
-          <div style={{ padding: '10px 10px', borderTop: `1px solid ${c.borderSoft}` }}>
+          <div className="settings-sidebar-logout" style={{ padding: '10px 10px', borderTop: `1px solid ${c.borderSoft}` }}>
             <button onClick={logout} style={{
               display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 13,
               border: 'none', cursor: 'pointer', width: '100%', background: 'transparent',
@@ -657,7 +678,7 @@ export function SettingsPage() {
         </aside>
 
         {/* ── Content ── */}
-        <main style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 40px' }}>
+        <main className="settings-main" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 40px' }}>
           <div style={{ width: '100%', maxWidth: 1140 }}>
             {/* Page header */}
             <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: `1px solid ${c.borderSoft}` }}>

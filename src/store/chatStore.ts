@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { MessageType, ReactionGroup, AttachmentDTO, LinkPreviewDTO } from '../types/chat'
+import type { MessageType, ReactionGroup, AttachmentDTO, LinkPreviewDTO, PollDTO } from '../types/chat'
 
 export interface ChatListItem {
   id: number
@@ -34,6 +34,7 @@ export interface Message {
   expiresAt: string | null
   viewOnce: boolean
   viewedByMe: boolean
+  poll?: PollDTO
 }
 
 interface PresenceEntry {
@@ -81,6 +82,7 @@ interface ChatState {
   toggleStarred: (messageId: number, isStarred: boolean) => void
   removeMessage: (messageId: number) => void
   markViewedOnce: (messageId: number) => void
+  updateMessagePoll: (messageId: number, poll: PollDTO) => void
 }
 
 function mapAllMessages(
@@ -257,6 +259,12 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: mapAllMessages(s.messages, (m) =>
         m.id === messageId ? { ...m, viewedByMe: true } : m,
+      ),
+    })),
+  updateMessagePoll: (messageId, poll) =>
+    set((s) => ({
+      messages: mapAllMessages(s.messages, (m) =>
+        m.id === messageId ? { ...m, poll } : m,
       ),
     })),
 }))
