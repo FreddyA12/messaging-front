@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { useAuth } from '../hooks/useAuth'
@@ -11,6 +12,7 @@ import { StoriesList } from '../features/stories/components/StoriesList'
 import { StoriesPanel } from '../features/stories/components/StoriesPanel'
 import { useTheme } from '../hooks/useTheme'
 import { useNotifications } from '../hooks/useNotifications'
+import { UserAvatar } from '../components/UserAvatar'
 import type { StoryUserGroupDTO } from '../types/story'
 
 type Section = 'chats' | 'stories'
@@ -25,9 +27,12 @@ const LogoutIcon = () => (
 )
 
 export function MainLayout() {
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const { logout } = useAuth()
   const chats = useChatStore((s) => s.chats)
+  const activeChatId = useChatStore((s) => s.activeChatId)
+  const setActiveChat = useChatStore((s) => s.setActiveChat)
   const chatIds = useMemo(() => chats.map((c) => c.id), [chats])
   useSocket()
   useAllChatsNotifications(chatIds)
@@ -41,39 +46,64 @@ export function MainLayout() {
     setActiveStory({ groups, groupIdx })
   }
 
+  /* True when the main panel should be visible on mobile */
+  const chatPanelActive = !!activeChatId || section === 'stories'
+
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        :root { --sidebar-w: 320px; }
+        :root { --sidebar-w: 320px; --nav-h: 56px; }
         .logout-btn { transition: all 0.2s ease; }
         .logout-btn:hover { color: #c0392b !important; background: rgba(192,57,43,0.08) !important; }
         .main-layout-root * { font-family: 'Poppins', system-ui, sans-serif; }
+
+        /* Bottom padding so content doesn't go under the mobile nav bar */
+        @media (max-width: 767px) {
+          .main-layout-root { padding-bottom: var(--nav-h); }
+          /* NavRail hidden on mobile */
+          .layout-navrail { display: none !important; }
+          /* Sidebar is full-width on mobile */
+          .layout-sidebar { width: 100% !important; border-right: none !important; }
+          /* Bottom nav visible on mobile */
+          .layout-bottom-nav { display: flex !important; }
+        }
+        /* Tablet: no NavRail, narrower sidebar */
+        @media (min-width: 768px) and (max-width: 1023px) {
+          .layout-navrail { display: none !important; }
+          .layout-sidebar { width: 260px !important; }
+        }
       `}</style>
 
       <div className="main-layout-root" style={{
         display: 'flex', height: '100vh',
-        background: 'linear-gradient(155deg, #f0f3e6 0%, #e8ecda 40%, #f5f6f0 100%)',
+        background: 'var(--bg-page)',
         overflow: 'hidden',
       }}>
 
-        {/* ══════════ NAV RAIL ══════════ */}
-        <NavRail activeTab="chat" />
+        {/* ══════════ NAV RAIL (desktop/tablet hidden via CSS) ══════════ */}
+        <div className="layout-navrail" style={{ display: 'flex' }}>
+          <NavRail activeTab="chat" />
+        </div>
 
         {/* ══════════ SIDEBAR ══════════ */}
-        <aside style={{
-          width: 'var(--sidebar-w)', display: 'flex', flexDirection: 'column', flexShrink: 0,
-          background: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRight: '1px solid rgba(122,144,72,0.16)',
-          boxShadow: '2px 0 20px rgba(0,0,0,0.04)', zIndex: 10,
-        }}>
-
+        {/* On mobile: hidden when chat panel is active via Tailwind hidden/md:flex */}
+        <aside
+          className={`layout-sidebar flex-col shrink-0 ${chatPanelActive ? 'hidden md:flex' : 'flex'}`}
+          style={{
+            width: 'var(--sidebar-w)',
+            background: 'var(--bg-sidebar)', backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRight: '1px solid var(--border-subtle)',
+            boxShadow: '2px 0 20px rgba(0,0,0,0.06)', zIndex: 10,
+          }}
+        >
           {/* ── Header ── */}
           <div style={{
             padding: '18px 20px 14px',
-            borderBottom: '1px solid rgba(122,144,72,0.12)',
+            borderBottom: '1px solid var(--border-subtle)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            background: 'var(--bg-sidebar-header)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
               <div style={{
@@ -87,11 +117,11 @@ export function MainLayout() {
                 </svg>
               </div>
               <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: 14, fontWeight: 600, color: '#242d16', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
                   {user?.name}
                 </p>
                 {user?.statusText && (
-                  <p style={{ fontSize: 11, color: '#8a9a7a', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
                     {user.statusText}
                   </p>
                 )}
@@ -100,16 +130,14 @@ export function MainLayout() {
             <button onClick={logout} title="Cerrar sesión" className="logout-btn" style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 30, height: 30, borderRadius: 9, border: 'none',
-              background: 'transparent', color: '#9aaa82', cursor: 'pointer', flexShrink: 0,
+              background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', flexShrink: 0,
             }}>
               <LogoutIcon />
             </button>
           </div>
 
           {/* ── Section tabs ── */}
-          <div style={{
-            display: 'flex', borderBottom: '1px solid rgba(122,144,72,0.12)',
-          }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)' }}>
             {(['chats', 'stories'] as Section[]).map((s) => (
               <button
                 key={s}
@@ -117,7 +145,7 @@ export function MainLayout() {
                 style={{
                   flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
                   background: 'none', fontSize: 13, fontWeight: section === s ? 600 : 400,
-                  color: section === s ? '#7a9048' : '#9aaa82',
+                  color: section === s ? '#7a9048' : 'var(--color-text-muted)',
                   borderBottom: section === s ? '2px solid #7a9048' : '2px solid transparent',
                   transition: 'all .15s', fontFamily: "'Poppins',system-ui,sans-serif",
                   marginBottom: -1,
@@ -138,17 +166,21 @@ export function MainLayout() {
 
           {/* ── Footer ── */}
           <div style={{
-            padding: '10px 20px', borderTop: '1px solid rgba(122,144,72,0.1)',
+            padding: '10px 20px', borderTop: '1px solid var(--border-subtle)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
             <span style={{ fontSize: 10, color: '#91a662', fontWeight: 600, letterSpacing: '.1em' }}>WHISPR</span>
-            <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#ccd9a0' }} />
-            <span style={{ fontSize: 10, color: '#b8c890' }}>cifrado de extremo a extremo</span>
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--color-text-muted)' }} />
+            <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>cifrado de extremo a extremo</span>
           </div>
         </aside>
 
         {/* ══════════ MAIN PANEL ══════════ */}
-        <main style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* On mobile: hidden when no chat is active */}
+        <main
+          className={`flex overflow-hidden ${!chatPanelActive ? 'hidden md:flex' : 'flex'}`}
+          style={{ flex: 1 }}
+        >
           {section === 'stories' && activeStory ? (
             <StoriesPanel
               groups={activeStory.groups}
@@ -156,11 +188,10 @@ export function MainLayout() {
               onClose={() => setActiveStory(null)}
             />
           ) : section === 'stories' ? (
-            /* Stories placeholder */
             <div style={{
               flex: 1, display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 12,
-              color: '#9aaa82',
+              color: 'var(--color-text-muted)',
             }}>
               <svg width="56" height="56" fill="none" stroke="currentColor" strokeWidth="1.2" viewBox="0 0 24 24">
                 <circle cx="12" cy="8" r="4" />
@@ -169,12 +200,82 @@ export function MainLayout() {
               <p style={{ fontSize: 14, color: '#9aaa82', margin: 0 }}>Selecciona una historia para verla</p>
             </div>
           ) : (
-            <ChatWindow />
+            <ChatWindow onBack={() => setActiveChat(null)} />
           )}
         </main>
+
+        {/* ══════════ BOTTOM NAV (mobile only, shown via CSS) ══════════ */}
+        <nav className="layout-bottom-nav" style={{
+          display: 'none',
+          position: 'fixed', bottom: 0, left: 0, right: 0,
+          height: 'var(--nav-h)',
+          background: 'var(--bg-sidebar)', backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderTop: '1px solid var(--border-subtle)',
+          alignItems: 'center', justifyContent: 'space-around',
+          zIndex: 50,
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}>
+          <BottomNavBtn
+            active={section === 'chats'}
+            label="Chats"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            }
+            onClick={() => { setSection('chats'); setActiveStory(null); setActiveChat(null) }}
+          />
+          <BottomNavBtn
+            active={section === 'stories'}
+            label="Historias"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M2 21a10 10 0 0 1 20 0" />
+              </svg>
+            }
+            onClick={() => { setSection('stories'); setActiveStory(null); setActiveChat(null) }}
+          />
+          <button
+            onClick={() => navigate('/settings')}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              background: 'none', border: 'none', cursor: 'pointer', padding: '6px 16px',
+              color: '#9aaa82',
+            }}
+          >
+            <UserAvatar userId={user?.id} name={user?.name ?? 'U'} size={22} />
+            <span style={{ fontSize: 10, fontFamily: "'Poppins',system-ui,sans-serif" }}>Perfil</span>
+          </button>
+        </nav>
 
         <CallManager />
       </div>
     </>
+  )
+}
+
+function BottomNavBtn({
+  active, label, icon, onClick,
+}: {
+  active: boolean
+  label: string
+  icon: React.ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+        background: 'none', border: 'none', cursor: 'pointer', padding: '6px 16px',
+        color: active ? '#7a9048' : '#9aaa82',
+        fontFamily: "'Poppins',system-ui,sans-serif",
+      }}
+    >
+      {icon}
+      <span style={{ fontSize: 10, fontWeight: active ? 600 : 400 }}>{label}</span>
+    </button>
   )
 }

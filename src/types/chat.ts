@@ -61,7 +61,22 @@ export interface ChatDTO {
   members?: GroupMemberDTO[] | null
 }
 
-export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'SYSTEM'
+export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'SYSTEM' | 'POLL'
+
+export interface PollOptionDTO {
+  id: number
+  text: string
+  voteCount: number
+  votedByMe: boolean
+}
+
+export interface PollDTO {
+  id: number
+  question: string
+  allowsMultiple: boolean
+  options: PollOptionDTO[]
+  totalVotes: number
+}
 
 export interface ReactionGroup {
   emoji: string
@@ -89,6 +104,9 @@ export interface MessageDTO {
   attachments?: AttachmentDTO[]
   linkPreviews?: LinkPreviewDTO[]
   expiresAt?: string | null
+  viewOnce?: boolean
+  viewedByMe?: boolean
+  poll?: PollDTO
 }
 
 export interface SendMessageRequest {
@@ -98,6 +116,7 @@ export interface SendMessageRequest {
   replyToId?: number
   attachmentIds?: number[]
   ttlSeconds?: number
+  viewOnce?: boolean
 }
 
 export interface MessageNewEvent {
@@ -160,6 +179,11 @@ export interface MessagePinnedEvent {
   payload: { messageId: number; pinnedBy: number; at: string; isPinned: boolean }
 }
 
+export interface PollUpdatedEvent {
+  type: 'POLL_UPDATED'
+  payload: { messageId: number; poll: PollDTO }
+}
+
 export type ChatSocketEvent =
   | MessageNewEvent
   | MessageEditedEvent
@@ -173,3 +197,4 @@ export type ChatSocketEvent =
   | MessageDeliveredEvent
   | MessageReadEvent
   | MessagePinnedEvent
+  | PollUpdatedEvent

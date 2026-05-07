@@ -32,10 +32,15 @@ function toMessage(dto: MessageDTO): Message {
     content: decryptContent(dto.content),
     isPinned: dto.isPinned ?? false,
     isStarred: dto.isStarred ?? false,
+    reactions: dto.reactions ?? [],
+    readBy: dto.readBy ?? [],
+    deliveredTo: dto.deliveredTo ?? [],
     attachments: dto.attachments ?? [],
     linkPreviews: dto.linkPreviews ?? [],
     replyTo: dto.replyTo ? toMessage(dto.replyTo) : null,
     expiresAt: dto.expiresAt ?? null,
+    viewOnce: dto.viewOnce ?? false,
+    viewedByMe: dto.viewedByMe ?? false,
   }
 }
 
@@ -89,6 +94,7 @@ export function useChatSubscription(chatId: number | null) {
   const markRead = useChatStore((s) => s.markRead)
   const setTyping = useChatStore((s) => s.setTyping)
   const setPinned = useChatStore((s) => s.setPinned)
+  const updateMessagePoll = useChatStore((s) => s.updateMessagePoll)
 
   useEffect(() => {
     if (!chatId) return
@@ -104,7 +110,7 @@ export function useChatSubscription(chatId: number | null) {
             case 'MESSAGE_NEW': {
               const newMsg = toMessage(event.payload)
               addMessage(newMsg)
-              updateLastMessage(event.payload.chatId, event.payload.content, event.payload.createdAt)
+              updateLastMessage(event.payload.chatId, newMsg.content, event.payload.createdAt)
               // Auto-mark as read if the chat is active (message from someone else)
               if (event.payload.senderId !== useAuthStore.getState().user?.id) {
                 chatApi.markRead(event.payload.id).catch(() => {})
@@ -112,7 +118,7 @@ export function useChatSubscription(chatId: number | null) {
               break
             }
             case 'MESSAGE_EDITED':
-              editMessage(event.payload.messageId, event.payload.newContent, event.payload.editedAt)
+              editMessage(event.payload.messageId, decryptContent(event.payload.newContent) ?? '', event.payload.editedAt)
               break
             case 'MESSAGE_DELETED':
               deleteMessage(event.payload.messageId, event.payload.forEveryone)
@@ -128,6 +134,9 @@ export function useChatSubscription(chatId: number | null) {
               if (chatId) setPinned(pinEvent.payload.messageId, chatId, pinEvent.payload.isPinned)
               break
             }
+            case 'POLL_UPDATED':
+              updateMessagePoll(event.payload.messageId, event.payload.poll)
+              break
           }
         })
 
@@ -154,7 +163,7 @@ export function useChatSubscription(chatId: number | null) {
       typingSub?.unsubscribe()
       readSub?.unsubscribe()
     }
-  }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping, setPinned])
+  }, [chatId, addMessage, updateLastMessage, editMessage, deleteMessage, addReaction, removeReaction, markRead, setTyping, setPinned, updateMessagePoll])
 }
 
 /**

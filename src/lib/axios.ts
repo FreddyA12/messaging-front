@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { isAxiosError } from 'axios'
 import { useAuthStore } from '../store/authStore'
 
 export const api = axios.create({
@@ -59,8 +59,12 @@ api.interceptors.response.use(
 
       original.headers.Authorization = `Bearer ${data.accessToken}`
       return api(original)
-    } catch {
-      clearAuth()
+    } catch (refreshError) {
+      // Only force logout when the server explicitly rejects the refresh token (401).
+      // Network errors or 5xx (server restarting) should not log the user out.
+      if (isAxiosError(refreshError) && refreshError.response?.status === 401) {
+        clearAuth()
+      }
       pendingRequests = []
       return Promise.reject(error)
     } finally {

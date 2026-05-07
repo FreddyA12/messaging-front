@@ -288,3 +288,43 @@ src/
 - [x] `src/hooks/useSocket.ts` — descifrar `content` en `toMessage()` (cubre `MESSAGE_NEW` en `useChatSubscription` y `useAllChatsNotifications`)
 - [x] `src/features/chat/api.ts` — descifrar cada `content` en `getMessages`
 - [x] Solo `content` pasa por cifrado — type, attachments, reactions y demás campos no se tocan
+
+---
+
+## FASE 13 — Mejoras de UX e integración multimedia
+
+### 13.1 — Ver una vez (view-once)
+**Estado:** `[x]`
+
+- [x] `src/types/chat.ts`: añadir `viewOnce?: boolean`, `viewedByMe?: boolean` a `MessageDTO`; `viewOnce?: boolean` a `SendMessageRequest`
+- [x] `src/store/chatStore.ts`: añadir `viewOnce: boolean`, `viewedByMe: boolean` a `Message`; acción `markViewedOnce(messageId)`
+- [x] `src/hooks/useSocket.ts`: `toMessage()` mapea los nuevos campos
+- [x] `src/features/chat/api.ts`: `markViewedOnce(id)` → `POST /api/messages/{id}/view-once`; `decryptMessage` normaliza los nuevos campos
+- [x] `ImageBubble.tsx`: si `viewOnce && !isOwn && !viewedByMe` → botón "Ver foto"; si ya visto → placeholder "Foto vista"; badge "👁 1" en mensajes propios
+- [x] `VideoBubble.tsx`: igual que ImageBubble pero para video
+- [x] `AttachPreview.tsx`: botón ojo toggleable (solo para IMAGE/VIDEO) que activa `viewOnce` antes de enviar
+- [x] `ChatWindow.tsx`: estado `viewOnce`; toggle desde `AttachPreview`; campo `viewOnce` en payload STOMP
+
+### 13.2 — Grabación de audio
+**Estado:** `[x]`
+
+- [x] `AudioRecorder.tsx`: MediaRecorder API; fase grabando (timer + barra animada + cancelar/detener) y fase preview (player nativo + cancelar/enviar)
+- [x] Al confirmar → crea `File` con el blob → llama `handleFileSelected(file, 'AUDIO')` → sube con el endpoint existente `/api/media/upload`
+- [x] Botón micrófono en barra inferior del chat (visible cuando no hay texto ni adjunto); reemplaza la barra entera al grabar
+
+### 13.3 — Cámara integrada con filtros
+**Estado:** `[x]`
+
+- [x] `CameraCapture.tsx`: modal full-screen con `getUserMedia({ video: true, audio: true })`
+- [x] Filtros CSS en el viewfinder: Normal, B&N (`grayscale`), Sepia, Vívido (`saturate+contrast`), Cálido (`sepia+hue-rotate`), Frío (`hue-rotate+brightness`)
+- [x] Foto: captura a `<canvas>` con el filtro CSS aplicado → Blob JPEG → File → upload
+- [x] Video: `MediaRecorder` sobre el stream; botón detener → preview con `<video controls>` → File → upload
+- [x] Retomar: vuelve a abrir la cámara; Confirmar: envía el archivo al chat
+- [x] Botón cámara en la barra inferior del chat
+
+### 13.4 — Reorganización de la barra inferior
+**Estado:** `[x]`
+
+- [x] Nueva disposición: `[📎 adjuntar] [📷 cámara] [textarea flex-1] [⏱ TTL] [🎤 mic → ✉️ send]`
+- [x] El botón derecho cambia dinámicamente: micrófono cuando no hay texto/adjunto; enviar cuando hay contenido o está editando
+- [x] El menú TTL ahora se abre hacia arriba-derecha en lugar de arriba-izquierda

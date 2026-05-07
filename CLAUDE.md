@@ -63,6 +63,7 @@ Al terminar cada fase, actualiza la tabla de abajo con los archivos modificados,
 | 11 — Historias (Stories) | ✅ | `types/story.ts`, `store/storyStore.ts`, `features/stories/api.ts`, `features/stories/components/StoriesBar.tsx`, `StoryViewer.tsx`, `CreateStoryDialog.tsx`, `routes/MainLayout.tsx` | Feed agrupado por usuario, visor full-screen con progreso, texto o imagen/video, 24h TTL, cleanup cada hora en backend. |
 | Fixes & mejoras post-11 | ✅ | `MainLayout.tsx`, `chatStore.ts`, `hooks/useSocket.ts`, `StoriesList.tsx`, `StoriesPanel.tsx`, `StoryPrivacyDialog.tsx`, `features/stories/api.ts`, `SettingsPage.tsx` | Ver detalle abajo. |
 | 12 — Cifrado Afín | ✅ | `src/lib/afin.ts`, `src/store/encryptionStore.ts`, `LoginPage.tsx`, `RegisterPage.tsx`, `authStore.ts`, `ChatWindow.tsx`, `hooks/useSocket.ts`, `features/chat/api.ts` | Ver detalle abajo. |
+| 13 — Mejoras UX multimedia | ✅ | `AudioRecorder.tsx`, `CameraCapture.tsx`, `ImageBubble.tsx`, `VideoBubble.tsx`, `AttachPreview.tsx`, `MessageBubble.tsx`, `ChatWindow.tsx`, `chatStore.ts`, `types/chat.ts`, `features/chat/api.ts` | Ver detalle abajo. |
 
 ---
 
@@ -582,6 +583,38 @@ Para testing y desarrollo, están disponibles los siguientes usuarios:
 - Todos los impares [3,255] pasan round-trip
 - `safeDecrypt` devuelve original para texto plano no cifrado
 - Mutation test: byte adulterado → output diferente al original
+
+---
+
+## Fase 13 — Detalle de implementación (Mejoras UX multimedia)
+
+### Ver una vez
+- `MessageDTO` y `SendMessageRequest` en `src/types/chat.ts`: nuevos campos `viewOnce?: boolean`, `viewedByMe?: boolean`
+- `Message` en `src/store/chatStore.ts`: `viewOnce: boolean`, `viewedByMe: boolean`; acción `markViewedOnce(messageId)` → setea `viewedByMe: true` en el store
+- `chatApi.markViewedOnce(id)` → `POST /api/messages/{id}/view-once` (silenciado con `.catch(() => {})`)
+- `ImageBubble` / `VideoBubble`: tres estados para receptor — "tap to view" cover, imagen/video normal revelado, placeholder "Foto/Video vista". En mensajes propios muestra badge ojo con "1"
+- `AttachPreview`: botón ojo toggleable (solo IMAGE/VIDEO); activa flag `viewOnce` antes de enviar
+- `ChatWindow`: estado `viewOnce`, toggle en preview; se incluye en el payload STOMP como `viewOnce: true`
+
+### Grabación de audio
+- `AudioRecorder.tsx`: dos fases — `recording` (timer + barra animada roja, botón stop) y `preview` (`<audio controls>` + botón cancelar/enviar)
+- Usa `MediaRecorder` con `audio/webm;codecs=opus` (fallback `audio/webm`)
+- Al enviar: crea `File` → pasa a `handleFileSelected(file, 'AUDIO')` → flujo normal de upload
+- Botón micrófono en la barra inferior visible cuando no hay texto ni adjunto; al pulsar reemplaza la barra entera con `AudioRecorder`
+
+### Cámara integrada
+- `CameraCapture.tsx`: modal full-screen negro
+- Filtros CSS aplicados en tiempo real sobre el `<video>`: Normal, B&N, Sepia, Vívido, Cálido, Frío
+- Foto: `canvas.toBlob(jpeg, 0.92)` con `ctx.filter` aplicado → File
+- Video: `MediaRecorder` sobre el `getUserMedia` stream (con audio); botón detener → fase preview
+- Botón flip cámara alterna entre `user` / `environment`
+- Fases: `preview` → `photo-taken` / `recording` → `video-taken`; retomar reinicia la cámara
+
+### Reorganización de la barra inferior
+- Layout: `[📎] [📷] [textarea] [⏱] [🎤/✉️]`
+- El botón derecho es dinámico: micrófono si no hay `input.trim() && !pendingAttach && !editingMessage`; botón enviar en caso contrario
+- El menú TTL se posiciona `bottom-12 right-0` (antes `left-0`)
+- `CameraCapture` se renderiza como modal `position:fixed` independiente del layout del chat
 
 ## Instrucción para Claude
 

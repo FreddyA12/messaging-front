@@ -25,10 +25,9 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const root = document.documentElement
     const p = PALETTES[palette]
-    root.style.setProperty('--color-primary',       p.primary)
-    root.style.setProperty('--color-primary-dark',  p.dark)
-    root.style.setProperty('--color-primary-light', p.light)
-    root.style.setProperty('--bubble-outgoing',     p.light)
+    // Only affect chat bubble colors — not global chrome
+    root.style.setProperty('--bubble-outgoing-lm', p.light)
+    root.style.setProperty('--bubble-outgoing-dm', p.darkBubble)
   }, [palette])
 
   useEffect(() => {
