@@ -176,48 +176,76 @@ src/
 ## FASE 7 — Grupos
 
 ### 7.1
-**Estado:** `[ ]`
-- [ ] Dialog crear grupo (nombre, foto, seleccionar miembros)
-- [ ] `GroupInfoPanel.tsx` — miembros, media compartida, enlace de invitación
-- [ ] Gestión de miembros (añadir, eliminar, cambiar rol — solo admins)
-- [ ] Autocomplete de @menciones en el input
+**Estado:** `[x]`
+- [x] Dialog crear grupo (nombre, foto, seleccionar miembros)
+- [x] `GroupInfoPanel.tsx` — miembros, media compartida, enlace de invitación
+- [x] Gestión de miembros (añadir, eliminar, cambiar rol — solo admins)
+- [x] Autocomplete de @menciones en el input
 
 ---
 
 ## FASE 8 — Personalización
 
 ### 8.1
-**Estado:** `[ ]`
-- [ ] Toggle modo oscuro/claro (aplica clase `.dark` a `<html>`)
-- [ ] Fondo por chat: selector de color/gradiente/imagen — guarda en chatStore y en backend
-- [ ] `ThemeSettings.tsx`, `ChatWallpaper.tsx`, `PrivacySettings.tsx`
-- [ ] Selector de tamaño de fuente (aplica clase a `<html>`: `font-small`, `font-large`)
-- [ ] Color de burbujas propias personalizable (actualiza `--bubble-outgoing` en CSS)
+**Estado:** `[x]`
+- [x] Toggle modo oscuro/claro (aplica clase `.dark` a `<html>`)
+- [x] Fondo por chat: selector de color/gradiente/imagen — guarda en chatStore y en backend
+- [x] `ThemeSettings.tsx`, `ChatWallpaper.tsx`, `PrivacySettings.tsx`
+- [x] Selector de tamaño de fuente (aplica clase a `<html>`: `font-small`, `font-large`)
+- [x] Color de burbujas propias personalizable (actualiza `--bubble-outgoing` en CSS)
 
 ---
 
 ## FASE 9 — Notificaciones y privacidad
 
 ### 9.1
-**Estado:** `[ ]`
-- [ ] Pedir permiso de Notification API al login
-- [ ] Mostrar notificación cuando la pestaña no está activa + mensaje nuevo
-- [ ] Silenciar chat por tiempo (UI en menú del chat)
-- [ ] `PrivacySettings.tsx` — última vez, foto, ticks de lectura
+**Estado:** `[x]`
+- [x] Pedir permiso de Notification API al login
+- [x] Mostrar notificación cuando la pestaña no está activa + mensaje nuevo
+- [x] Silenciar chat por tiempo (UI en menú del chat)
+- [x] `PrivacySettings.tsx` — última vez, foto, ticks de lectura
 
 ---
 
 ## FASE 10 — Mensajes Temporales
 
 ### 10.1
-**Estado:** `[ ]`
-- [ ] `src/types/chat.ts`: añadir `expiresAt?: string` a `MessageDTO`; añadir `ttlSeconds?: number` a `SendMessageRequest`
-- [ ] `src/features/chat/api.ts`: `setMessageTtl(messageId, ttlSeconds)` → `PATCH /api/messages/{id}/ttl`
-- [ ] `MessageBubble.tsx`:
+**Estado:** `[x]`
+- [x] `src/types/chat.ts`: añadir `expiresAt?: string` a `MessageDTO`; añadir `ttlSeconds?: number` a `SendMessageRequest`
+- [x] `src/features/chat/api.ts`: `setMessageTtl(messageId, ttlSeconds)` → `PATCH /api/messages/{id}/ttl`
+- [x] `MessageBubble.tsx`:
   - Mostrar contador regresivo visible si `expiresAt` está presente (`useEffect` con `setInterval` de 1s)
   - Icono de reloj junto a la hora de envío
   - Al llegar a 0 → eliminar la burbuja del store localmente (no esperar evento WS)
-- [ ] Menú contextual en `MessageBubble` (solo mensajes propios): opción "Activar autodestrucción" → abre selector de tiempo (30 s, 5 min, 1 h, 24 h, 7 d, personalizado)
-- [ ] `TtlPickerDialog.tsx` — modal con opciones de tiempo + input personalizado en segundos
-- [ ] Al enviar mensaje nuevo: añadir selector de TTL opcional en el área de input (icono reloj junto al botón enviar)
-- [ ] `chatStore.ts`: `scheduleLocalExpiry(messageId, expiresAt)` — si el tab está abierto, elimina el mensaje del estado local cuando llega la hora
+- [x] Menú contextual en `MessageBubble` (solo mensajes propios): opción "Activar autodestrucción" → abre selector de tiempo (30 s, 5 min, 1 h, 24 h, 7 d, personalizado)
+- [x] `TtlPickerDialog.tsx` — modal con opciones de tiempo + input personalizado en segundos
+- [x] Al enviar mensaje nuevo: añadir selector de TTL opcional en el área de input (icono reloj junto al botón enviar)
+- [x] `chatStore.ts`: `removeMessage(messageId)` — elimina el mensaje del estado local cuando llega la hora
+
+---
+
+## FASE 11 — Historias (Stories)
+
+### 11.1
+**Estado:** `[x]`
+- [x] `src/types/story.ts`: `StoryDTO`, `StoryUserGroupDTO`
+- [x] `src/store/storyStore.ts`: `feedGroups`, `myStories`, acciones
+- [x] `src/features/stories/api.ts`: `getFeed`, `getMyStories`, `createStory`, `deleteStory`, `viewStory`, `mediaUrl`, `thumbnailUrl`
+- [x] `src/features/stories/components/StoriesBar.tsx` — barra horizontal sobre el chat list con avatares anillados
+- [x] `src/features/stories/components/StoryViewer.tsx` — visor full-screen con barra de progreso, navegación, auto-avance 5 s
+- [x] `src/features/stories/components/CreateStoryDialog.tsx` — crear historia de texto (colores de fondo) o imagen/video
+- [x] Integración en `MainLayout.tsx` — `<StoriesBar />` sobre `<ChatList />`
+
+---
+
+## FIXES Y MEJORAS (post-fase 11)
+
+- [x] **Bug auto-notificación**: `setActiveChat` limpia `unreadCount` del chat al abrirlo
+- [x] **Tiempo real mensajes no activos**: hook `useAllChatsNotifications` — suscribe a todos los chats simultáneamente; incrementa `unreadCount` en tiempo real cuando llega mensaje de otro en chat no activo (`store/chatStore.ts`: `incrementUnread`, `clearUnread`)
+- [x] **Avatar feedback**: `SettingsPage.tsx` muestra preview inmediato al subir foto y mensaje de éxito/error
+- [x] **Historias en sección propia**: pestaña "Chats" / "Historias" en el sidebar de `MainLayout.tsx`; historias ya no están mezcladas con la lista de chats
+- [x] **Visor en panel principal**: `StoriesPanel.tsx` — historia en panel principal con barra de progreso animada, proporción 9:16, navegación por tap/teclado; no es overlay
+- [x] **StoriesList**: `StoriesList.tsx` — lista vertical de historias en el sidebar (Mi historia + Recientes, anillos, tiempo relativo)
+- [x] **Ocultar historias**: `StoryPrivacyDialog.tsx` — seleccionar contactos para ocultar tu historia; guarda en backend `PUT /api/stories/privacy`; feed del visor filtra automáticamente
+- [x] **Fix blob media historias**: `StoryViewer` y `StoriesPanel` usan `api.get(..., {responseType:'blob'})` en lugar de `fetch` nativo (corrige URL y JWT)
+- [x] **Fix infinite loop**: `chatIds` memoizado con `useMemo` en `MainLayout.tsx` para evitar re-renders infinitos al usar Zustand selector con `.map()`

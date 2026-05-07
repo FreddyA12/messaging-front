@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react'
-import type { Message } from '../../../store/chatStore'
+import { useChatStore, type Message } from '../../../store/chatStore'
 import { ImageBubble } from './ImageBubble'
 import { VideoBubble } from './VideoBubble'
 import { AudioBubble } from './AudioBubble'
@@ -19,9 +19,42 @@ interface MessageBubbleProps {
   onPin: (message: Message) => void
   onStar: (message: Message) => void
   onForward: (message: Message) => void
+  onSetTtl?: (message: Message) => void
   onScrollToReply?: (messageId: number) => void
   setRef?: (id: number, el: HTMLDivElement | null) => void
   isHighlighted?: boolean
+}
+
+function useCountdown(expiresAt: string | null | undefined, onExpired: () => void) {
+  const [remaining, setRemaining] = useState<number | null>(null)
+  const onExpiredRef = useRef(onExpired)
+  onExpiredRef.current = onExpired
+
+  useEffect(() => {
+    if (!expiresAt) { setRemaining(null); return }
+    const target = new Date(expiresAt).getTime()
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((target - Date.now()) / 1000))
+      setRemaining(diff)
+      if (diff === 0) onExpiredRef.current()
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [expiresAt])
+
+  return remaining
+}
+
+function formatCountdown(secs: number): string {
+  if (secs >= 86400) return `${Math.floor(secs / 86400)}d`
+  if (secs >= 3600) return `${Math.floor(secs / 3600)}h`
+  if (secs >= 60) {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m}m ${s}s`
+  }
+  return `${secs}s`
 }
 
 type TickStatus = 'sent' | 'delivered' | 'read'
@@ -80,11 +113,14 @@ export function MessageBubble({
   onPin,
   onStar,
   onForward,
+  onSetTtl,
   onScrollToReply,
   setRef,
   isHighlighted,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId
+  const removeMessage = useChatStore((s) => s.removeMessage)
+  const countdown = useCountdown(message.expiresAt, () => removeMessage(message.id))
   const [showMenu, setShowMenu] = useState(false)
   const [menuPos, setMenuPos] = useState<{ top: number; right?: number; left?: number } | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -290,6 +326,15 @@ export function MessageBubble({
                 <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v2h2a1 1 0 010 2h-1v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8H3a1 1 0 110-2h2V4zm2 2h6V4H7v2zm-1 2v8h8V8H6z" />
               </svg>
             )}
+            {countdown !== null && (
+              <span className="text-[10px] text-orange-400 font-medium flex items-center gap-0.5">
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeWidth={2} d="M12 6v6l4 2" />
+                </svg>
+                {formatCountdown(countdown)}
+              </span>
+            )}
             <span className="text-[10px] text-gray-400 dark:text-gray-500">
               {formatTime(message.createdAt)}
             </span>
@@ -358,12 +403,22 @@ export function MessageBubble({
             {message.isPinned ? 'Desfijar' : 'Fijar'}
           </button>
           {isOwn && (
-            <button
-              onClick={() => { onEdit(message); setShowMenu(false) }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Editar
-            </button>
+            <>
+              <button
+                onClick={() => { onEdit(message); setShowMenu(false) }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Editar
+              </button>
+              {onSetTtl && (
+                <button
+                  onClick={() => { onSetTtl(message); setShowMenu(false) }}
+                  className="w-full text-left px-4 py-2 text-sm text-orange-500 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  {message.expiresAt ? '⏱ Cambiar autodestrucción' : '⏱ Autodestrucción'}
+                </button>
+              )}
+            </>
           )}
           <button
             onClick={() => { onDelete(message); setShowMenu(false) }}

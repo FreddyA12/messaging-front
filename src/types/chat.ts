@@ -38,15 +38,27 @@ export interface LinkItemDTO {
   sentAt: string
 }
 
+export interface GroupMemberDTO {
+  userId: number
+  name: string
+  email: string
+  avatarUrl: string | null
+  role: 'ADMIN' | 'MEMBER'
+  joinedAt: string
+}
+
 export interface ChatDTO {
   id: number
   type: 'PRIVATE' | 'GROUP'
   name: string
+  description?: string | null
   avatarUrl: string | null
   lastMessage: string | null
   lastMessageAt: string | null
   unreadCount: number
   otherUserId?: number
+  inviteCode?: string | null
+  members?: GroupMemberDTO[] | null
 }
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'SYSTEM'
@@ -76,6 +88,7 @@ export interface MessageDTO {
   isStarred?: boolean
   attachments?: AttachmentDTO[]
   linkPreviews?: LinkPreviewDTO[]
+  expiresAt?: string | null
 }
 
 export interface SendMessageRequest {
@@ -84,6 +97,7 @@ export interface SendMessageRequest {
   type?: string
   replyToId?: number
   attachmentIds?: number[]
+  ttlSeconds?: number
 }
 
 export interface MessageNewEvent {
