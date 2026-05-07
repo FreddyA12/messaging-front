@@ -36,8 +36,12 @@ export const useAuthStore = create<AuthState>()(
       updateAccessToken: (accessToken) =>
         set({ accessToken }),
 
-      clearAuth: () =>
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
+      clearAuth: () => {
+        import('./encryptionStore').then(({ useEncryptionStore }) => {
+          useEncryptionStore.getState().clearKey()
+        })
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
+      },
     }),
     {
       name: 'auth-storage',

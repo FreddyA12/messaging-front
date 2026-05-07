@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from './api'
 import { useAuthStore } from '../../store/authStore'
+import { useEncryptionStore } from '../../store/encryptionStore'
 
 const schema = z.object({
   name: z.string().min(1, 'El nombre es requerido').max(100),
@@ -51,6 +52,11 @@ export default function RegisterPage() {
     try {
       const res = await authApi.register(data)
       setAuth(res.user, res.accessToken, res.refreshToken)
+      const oddValues: number[] = []
+      for (let v = 3; v <= 255; v += 2) oddValues.push(v)
+      const a = oddValues[Math.floor(Math.random() * oddValues.length)]
+      const b = Math.floor(Math.random() * 256)
+      useEncryptionStore.getState().setKey(a, b)
       navigate('/')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
