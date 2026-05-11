@@ -2,8 +2,7 @@ import { useEffect, useRef } from 'react'
 import { connectSocket, disconnectSocket, subscribe, publish } from '../lib/socket'
 import { useChatStore, type Message } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
-import { useEncryptionStore } from '../store/encryptionStore'
-import { safeDecrypt } from '../lib/afin'
+import { safeDecrypt, deriveKey } from '../lib/afin'
 import { chatApi } from '../features/chat/api'
 import type { StompSubscription } from '@stomp/stompjs'
 import type {
@@ -18,10 +17,9 @@ import type {
   MessageDTO,
 } from '../types/chat'
 
-function decryptContent(content: string | null | undefined): string | null {
+function decryptContent(content: string | null | undefined, senderId: number): string | null {
   if (!content) return content ?? null
-  const { a, b } = useEncryptionStore.getState()
-  if (a === null || b === null) return content
+  const { a, b } = deriveKey(senderId)
   return safeDecrypt(content, a, b)
 }
 
@@ -29,7 +27,7 @@ function decryptContent(content: string | null | undefined): string | null {
 function toMessage(dto: MessageDTO): Message {
   return {
     ...dto,
-    content: decryptContent(dto.content),
+    content: decryptContent(dto.content, dto.senderId),
     isPinned: dto.isPinned ?? false,
     isStarred: dto.isStarred ?? false,
     reactions: dto.reactions ?? [],
@@ -117,9 +115,15 @@ export function useChatSubscription(chatId: number | null) {
               }
               break
             }
-            case 'MESSAGE_EDITED':
-              editMessage(event.payload.messageId, decryptContent(event.payload.newContent) ?? '', event.payload.editedAt)
+            case 'MESSAGE_EDITED': {
+              const allMsgs = Object.values(useChatStore.getState().messages).flat()
+              const sender = allMsgs.find((m) => m.id === event.payload.messageId)
+              const decryptedEdit = sender
+                ? decryptContent(event.payload.newContent, sender.senderId) ?? ''
+                : event.payload.newContent
+              editMessage(event.payload.messageId, decryptedEdit, event.payload.editedAt)
               break
+            }
             case 'MESSAGE_DELETED':
               deleteMessage(event.payload.messageId, event.payload.forEveryone)
               break
@@ -192,7 +196,7 @@ export function useAllChatsNotifications(chatIds: number[]) {
             const currentUserId = useAuthStore.getState().user?.id
             const activeChatId = useChatStore.getState().activeChatId
 
-            updateLastMessage(event.payload.chatId, decryptContent(event.payload.content), event.payload.createdAt)
+            updateLastMessage(event.payload.chatId, decryptContent(event.payload.content, event.payload.senderId), event.payload.createdAt)
 
             // Show badge only for messages from others in non-active chats
             if (
