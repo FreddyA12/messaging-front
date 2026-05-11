@@ -1,12 +1,13 @@
 import { api } from '../../lib/axios'
-import { useEncryptionStore } from '../../store/encryptionStore'
-import { safeDecrypt } from '../../lib/afin'
+import { safeDecrypt, deriveKey } from '../../lib/afin'
 import type { ChatDTO, GroupMemberDTO, MessageDTO, PollDTO, SendMessageRequest } from '../../types/chat'
 
 function decryptMessage(msg: MessageDTO): MessageDTO {
-  const { a, b } = useEncryptionStore.getState()
-  const decrypted = a !== null && b !== null && msg.content
-    ? { ...msg, content: safeDecrypt(msg.content, a, b) }
+  const { a, b } = deriveKey(msg.senderId)
+  const decryptedContent = msg.content ? safeDecrypt(msg.content, a, b) : msg.content
+  console.log('[DECRYPT] senderId:', msg.senderId, '| key:', { a, b }, '| raw:', msg.content, '| plain:', decryptedContent)
+  const decrypted = msg.content
+    ? { ...msg, content: decryptedContent }
     : msg
   return {
     ...decrypted,

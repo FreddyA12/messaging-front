@@ -264,9 +264,10 @@ src/
   - `isValidKey(a: number): boolean` — `a` impar y `gcd(a, 256) === 1`
   - `encryptByte(x: number, a: number, b: number): number` — `(a*x + b) & 0xFF`
   - `decryptByte(y: number, aInv: number, b: number): number` — `(aInv*(y - b + 256)) & 0xFF`
-  - `encrypt(plaintext: string, a: number, b: number): string` — codifica cada byte, retorna Base64
+  - `encrypt(plaintext: string, a: number, b: number): string` — codifica cada byte, retorna `AFN:` + Base64
   - `decrypt(ciphertext: string, a: number, b: number): string` — decodifica Base64, aplica decrypt byte a byte
-  - `safeDecrypt` — wrapper con try/catch para compatibilidad con mensajes pre-cifrado
+  - `safeDecrypt` — si el texto no empieza por `AFN:` lo devuelve sin tocar; si empieza, descifra en try/catch
+  - `deriveKey(userId: number): { a, b }` — deriva clave determinista del ID de usuario: `a = (userId % 127) * 2 + 3`, `b = (userId * 37 + 11) % 256`; siempre impar, siempre en rango válido
 - [x] Tests unitarios: `encrypt(decrypt(x)) === x` para ASCII, emojis y caracteres multibyte + mutation tests (`src/lib/afin.test.ts`)
 
 ### 12.2 — Gestión de clave de sesión
@@ -277,17 +278,28 @@ src/
   - `a: number`, `b: number` — valores de la clave Afín
   - `setKey(a, b)` — valida con `isValidKey` antes de guardar
   - `clearKey()` — limpia al hacer logout
-- [x] Al hacer login exitoso: generar `a` y `b` aleatorios válidos y guardar en el store (`LoginPage.tsx`, `RegisterPage.tsx`)
+- [x] Al hacer login/registro exitoso: derivar clave con `deriveKey(user.id)` y guardar en el store (`LoginPage.tsx`, `RegisterPage.tsx`)
+- [x] Al recargar la página: `authStore` usa `onRehydrateStorage` para volver a derivar e inyectar la clave en cuanto se restaura el usuario de `sessionStorage` — sin esto las claves quedan `null` y no se cifra nada
 - [x] Al hacer logout: llamar `clearKey()` desde `authStore.clearAuth`
 
 ### 12.3 — Integración en envío y recepción de mensajes
 **Estado:** `[x]`
 **Depende de:** 12.1, 12.2
 
-- [x] `src/features/chat/components/ChatWindow.tsx` — cifrar `content` antes del `publish('/app/chat.send')` y antes de `chatApi.editMessage`
-- [x] `src/hooks/useSocket.ts` — descifrar `content` en `toMessage()` (cubre `MESSAGE_NEW` en `useChatSubscription` y `useAllChatsNotifications`)
-- [x] `src/features/chat/api.ts` — descifrar cada `content` en `getMessages`
+- [x] `src/features/chat/components/ChatWindow.tsx` — cifrar `content` con la clave del usuario actual antes del `publish('/app/chat.send')` y antes de `chatApi.editMessage`
+- [x] `src/hooks/useSocket.ts` — descifrar `content` en `toMessage()` con `deriveKey(dto.senderId)`; `MESSAGE_EDITED` busca el `senderId` en el store; `useAllChatsNotifications` pasa `event.payload.senderId`
+- [x] `src/features/chat/api.ts` — descifrar cada `content` en `getMessages` con `deriveKey(msg.senderId)`
 - [x] Solo `content` pasa por cifrado — type, attachments, reactions y demás campos no se tocan
+
+### 12.4 — Correcciones de diseño (clave compartida y prefijo)
+**Estado:** `[x]`
+**Depende de:** 12.1, 12.2, 12.3
+
+Problemas detectados y resueltos tras la implementación inicial:
+
+- [x] **Prefijo `AFN:`** — `encrypt` añade el prefijo `'AFN:'` antes del Base64; `safeDecrypt` devuelve el texto sin tocar si no empieza por ese prefijo. Evita que texto plano que resulta ser Base64 válido se descifre incorrectamente con la clave incorrecta, produciendo basura.
+- [x] **Clave derivada del ID del emisor** — el problema original es que cada usuario generaba una clave aleatoria distinta en cada login. El receptor intentaba descifrar el mensaje del emisor con su propia clave y obtenía texto corrupto. La solución: `deriveKey(userId)` produce siempre la misma clave para el mismo usuario, y como `senderId` viaja en todos los mensajes (DTO), el receptor siempre puede reconstruir la clave del emisor sin intercambio previo.
+- [x] **Restauración de clave en recarga** — `encryptionStore` no tiene `persist`, por lo que al recargar la página las claves quedaban `null` y los mensajes se enviaban sin cifrar (el `encryptContent` devolvía el texto plano). Resuelto con `onRehydrateStorage` en `authStore`: en cuanto Zustand restaura el usuario de `sessionStorage`, llama `deriveKey(user.id)` y hace `setKey`.
 
 ---
 

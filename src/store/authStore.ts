@@ -52,6 +52,16 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.user) {
+          import('./encryptionStore').then(({ useEncryptionStore }) => {
+            import('../lib/afin').then(({ deriveKey }) => {
+              const { a, b } = deriveKey(state.user!.id)
+              useEncryptionStore.getState().setKey(a, b)
+            })
+          })
+        }
+      },
     },
   ),
 )
