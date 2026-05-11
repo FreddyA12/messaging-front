@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
-import { useAuth } from '../hooks/useAuth'
+import { useCallStore } from '../store/callStore'
+import { callApi } from '../features/calls/api'
 import { useSocket, useAllChatsNotifications } from '../hooks/useSocket'
 import { ChatList } from '../features/chat/components/ChatList'
 import { ChatWindow } from '../features/chat/components/ChatWindow'
 import { CallManager } from '../features/calls/components/CallManager'
+import { CallHistoryList } from '../features/calls/components/CallHistoryList'
+import { ArchivedChatList } from '../features/chat/components/ArchivedChatList'
 import { NavRail } from '../features/settings/components/NavRail'
 import { StoriesList } from '../features/stories/components/StoriesList'
 import { StoriesPanel } from '../features/stories/components/StoriesPanel'
@@ -15,21 +18,18 @@ import { useNotifications } from '../hooks/useNotifications'
 import { UserAvatar } from '../components/UserAvatar'
 import type { StoryUserGroupDTO } from '../types/story'
 
-type Section = 'chats' | 'stories'
+type Section = 'chats' | 'stories' | 'calls' | 'archived'
 
-const LogoutIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" />
-    <line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
-)
+const SECTION_TITLES: Record<Section, string> = {
+  chats: 'Chats',
+  stories: 'Estados',
+  calls: 'Llamadas',
+  archived: 'Archivados',
+}
 
 export function MainLayout() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { logout } = useAuth()
   const chats = useChatStore((s) => s.chats)
   const activeChatId = useChatStore((s) => s.activeChatId)
   const setActiveChat = useChatStore((s) => s.setActiveChat)
@@ -42,33 +42,53 @@ export function MainLayout() {
   const [section, setSection] = useState<Section>('chats')
   const [activeStory, setActiveStory] = useState<{ groups: StoryUserGroupDTO[]; groupIdx: number } | null>(null)
 
+  const { setMissedCallsCount, clearMissedCalls } = useCallStore()
+  const currentUserId = user?.id
+
+  // Fetch call history once on mount to count missed calls for the badge
+  useEffect(() => {
+    callApi.history()
+      .then((calls) => {
+        const missed = calls.filter(
+          (c) => c.calleeId === currentUserId && (c.status === 'MISSED' || c.status === 'REJECTED'),
+        ).length
+        setMissedCallsCount(missed)
+      })
+      .catch(() => {})
+  }, [currentUserId, setMissedCallsCount])
+
   const handleSelectGroup = (groups: StoryUserGroupDTO[], groupIdx: number) => {
     setActiveStory({ groups, groupIdx })
   }
 
-  /* True when the main panel should be visible on mobile */
-  const chatPanelActive = !!activeChatId || section === 'stories'
+  const handleSectionChange = (s: Section) => {
+    setSection(s)
+    if (s !== 'stories') setActiveStory(null)
+    if (s !== 'chats') setActiveChat(null)
+    if (s === 'calls') clearMissedCalls()
+  }
+
+  /* On mobile: sidebar hides when a chat is open, or when in stories with a story selected */
+  const chatPanelActive = !!activeChatId || (section === 'stories' && !!activeStory)
+
+  const navActiveTab = section === 'stories' ? 'stories'
+    : section === 'calls' ? 'calls'
+    : section === 'archived' ? 'archived'
+    : 'chat'
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
         :root { --sidebar-w: 320px; --nav-h: 56px; }
-        .logout-btn { transition: all 0.2s ease; }
-        .logout-btn:hover { color: #c0392b !important; background: rgba(192,57,43,0.08) !important; }
         .main-layout-root * { font-family: 'Poppins', system-ui, sans-serif; }
 
-        /* Bottom padding so content doesn't go under the mobile nav bar */
         @media (max-width: 767px) {
           .main-layout-root { padding-bottom: var(--nav-h); }
-          /* NavRail hidden on mobile */
           .layout-navrail { display: none !important; }
-          /* Sidebar is full-width on mobile */
           .layout-sidebar { width: 100% !important; border-right: none !important; }
-          /* Bottom nav visible on mobile */
           .layout-bottom-nav { display: flex !important; }
         }
-        /* Tablet: no NavRail, narrower sidebar */
         @media (min-width: 768px) and (max-width: 1023px) {
           .layout-navrail { display: none !important; }
           .layout-sidebar { width: 260px !important; }
@@ -81,13 +101,15 @@ export function MainLayout() {
         overflow: 'hidden',
       }}>
 
-        {/* ══════════ NAV RAIL (desktop/tablet hidden via CSS) ══════════ */}
+        {/* ══════════ NAV RAIL (desktop) ══════════ */}
         <div className="layout-navrail" style={{ display: 'flex' }}>
-          <NavRail activeTab="chat" />
+          <NavRail
+            activeTab={navActiveTab}
+            onSectionChange={handleSectionChange}
+          />
         </div>
 
         {/* ══════════ SIDEBAR ══════════ */}
-        {/* On mobile: hidden when chat panel is active via Tailwind hidden/md:flex */}
         <aside
           className={`layout-sidebar flex-col shrink-0 ${chatPanelActive ? 'hidden md:flex' : 'flex'}`}
           style={{
@@ -102,66 +124,19 @@ export function MainLayout() {
           <div style={{
             padding: '18px 20px 14px',
             borderBottom: '1px solid var(--border-subtle)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
             background: 'var(--bg-sidebar-header)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 11,
-                background: 'linear-gradient(135deg, #7a9048, #91a662)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, boxShadow: '0 4px 12px rgba(122,144,72,0.25)',
-              }}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="white">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
-                  {user?.name}
-                </p>
-                {user?.statusText && (
-                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
-                    {user.statusText}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button onClick={logout} title="Cerrar sesión" className="logout-btn" style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 30, height: 30, borderRadius: 9, border: 'none',
-              background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', flexShrink: 0,
-            }}>
-              <LogoutIcon />
-            </button>
-          </div>
-
-          {/* ── Section tabs ── */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)' }}>
-            {(['chats', 'stories'] as Section[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => { setSection(s); if (s === 'chats') setActiveStory(null) }}
-                style={{
-                  flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
-                  background: 'none', fontSize: 13, fontWeight: section === s ? 600 : 400,
-                  color: section === s ? '#7a9048' : 'var(--color-text-muted)',
-                  borderBottom: section === s ? '2px solid #7a9048' : '2px solid transparent',
-                  transition: 'all .15s', fontFamily: "'Poppins',system-ui,sans-serif",
-                  marginBottom: -1,
-                }}
-              >
-                {s === 'chats' ? 'Chats' : 'Historias'}
-              </button>
-            ))}
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-text)', margin: 0, letterSpacing: '-0.02em' }}>
+              {SECTION_TITLES[section]}
+            </h2>
           </div>
 
           {/* ── Content ── */}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            {section === 'chats'
-              ? <ChatList />
-              : <StoriesList onSelectGroup={handleSelectGroup} />
-            }
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {section === 'chats' && <ChatList />}
+            {section === 'stories' && <StoriesList onSelectGroup={handleSelectGroup} />}
+            {section === 'calls' && <CallHistoryList />}
+            {section === 'archived' && <ArchivedChatList />}
           </div>
 
           {/* ── Footer ── */}
@@ -176,7 +151,6 @@ export function MainLayout() {
         </aside>
 
         {/* ══════════ MAIN PANEL ══════════ */}
-        {/* On mobile: hidden when no chat is active */}
         <main
           className={`flex overflow-hidden ${!chatPanelActive ? 'hidden md:flex' : 'flex'}`}
           style={{ flex: 1 }}
@@ -204,7 +178,7 @@ export function MainLayout() {
           )}
         </main>
 
-        {/* ══════════ BOTTOM NAV (mobile only, shown via CSS) ══════════ */}
+        {/* ══════════ BOTTOM NAV (mobile only) ══════════ */}
         <nav className="layout-bottom-nav" style={{
           display: 'none',
           position: 'fixed', bottom: 0, left: 0, right: 0,
@@ -224,24 +198,44 @@ export function MainLayout() {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             }
-            onClick={() => { setSection('chats'); setActiveStory(null); setActiveChat(null) }}
+            onClick={() => handleSectionChange('chats')}
           />
           <BottomNavBtn
             active={section === 'stories'}
-            label="Historias"
+            label="Estados"
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="8" r="4" />
                 <path d="M2 21a10 10 0 0 1 20 0" />
               </svg>
             }
-            onClick={() => { setSection('stories'); setActiveStory(null); setActiveChat(null) }}
+            onClick={() => handleSectionChange('stories')}
+          />
+          <BottomNavBtn
+            active={section === 'calls'}
+            label="Llamadas"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            }
+            onClick={() => handleSectionChange('calls')}
+          />
+          <BottomNavBtn
+            active={section === 'archived'}
+            label="Archivados"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8m-9 4h4" />
+              </svg>
+            }
+            onClick={() => handleSectionChange('archived')}
           />
           <button
             onClick={() => navigate('/settings')}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-              background: 'none', border: 'none', cursor: 'pointer', padding: '6px 16px',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
               color: '#9aaa82',
             }}
           >
@@ -269,7 +263,7 @@ function BottomNavBtn({
       onClick={onClick}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-        background: 'none', border: 'none', cursor: 'pointer', padding: '6px 16px',
+        background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
         color: active ? '#7a9048' : '#9aaa82',
         fontFamily: "'Poppins',system-ui,sans-serif",
       }}

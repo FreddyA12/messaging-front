@@ -45,7 +45,7 @@ export function UserAvatar({ userId, name, size = 40, fontSize, style }: UserAva
     return (
       <div style={base}>
         <img
-          src={`/api/users/${userId}/avatar`}
+          src={`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/api/users/${userId}/avatar`}
           alt={name}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={() => setFailed(true)}

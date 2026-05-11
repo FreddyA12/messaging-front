@@ -10,6 +10,8 @@ export interface ChatListItem {
   lastMessageAt: string | null
   unreadCount: number
   otherUserId?: number
+  isArchived?: boolean
+  isPinned?: boolean
 }
 
 export interface Message {
@@ -83,6 +85,10 @@ interface ChatState {
   removeMessage: (messageId: number) => void
   markViewedOnce: (messageId: number) => void
   updateMessagePoll: (messageId: number, poll: PollDTO) => void
+  setChatArchived: (chatId: number, isArchived: boolean) => void
+  setChatPinned: (chatId: number, isPinned: boolean) => void
+  removeChat: (chatId: number) => void
+  markChatUnread: (chatId: number) => void
 }
 
 function mapAllMessages(
@@ -265,6 +271,25 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: mapAllMessages(s.messages, (m) =>
         m.id === messageId ? { ...m, poll } : m,
+      ),
+    })),
+  setChatArchived: (chatId, isArchived) =>
+    set((s) => ({
+      chats: s.chats.map((c) => c.id === chatId ? { ...c, isArchived } : c),
+    })),
+  setChatPinned: (chatId, isPinned) =>
+    set((s) => ({
+      chats: s.chats.map((c) => c.id === chatId ? { ...c, isPinned } : c),
+    })),
+  removeChat: (chatId) =>
+    set((s) => ({
+      chats: s.chats.filter((c) => c.id !== chatId),
+      activeChatId: s.activeChatId === chatId ? null : s.activeChatId,
+    })),
+  markChatUnread: (chatId) =>
+    set((s) => ({
+      chats: s.chats.map((c) =>
+        c.id === chatId ? { ...c, unreadCount: Math.max(c.unreadCount, 1) } : c,
       ),
     })),
 }))

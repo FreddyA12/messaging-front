@@ -40,6 +40,27 @@ export const chatApi = {
   createPrivateChat: (userId: number) =>
     api.post<ChatDTO>('/api/chats', { userId }).then((r) => r.data),
 
+  archiveChat: (chatId: number) =>
+    api.patch(`/api/chats/${chatId}/archive`),
+
+  unarchiveChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/archive`),
+
+  pinChat: (chatId: number) =>
+    api.patch(`/api/chats/${chatId}/pin`),
+
+  unpinChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/pin`),
+
+  muteChat: (chatId: number, minutes: number) =>
+    api.patch(`/api/chats/${chatId}/mute`, null, { params: { minutes } }),
+
+  unmuteChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/mute`),
+
+  deleteChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}`),
+
   getMessages: (chatId: number, cursor?: string, limit = 50) =>
     api
       .get<MessageDTO[]>(`/api/chats/${chatId}/messages`, { params: { cursor, limit } })
