@@ -22,18 +22,29 @@ export function decryptByte(y: number, aInv: number, b: number): number {
   return (aInv * ((y - b + 256) & 0xff)) & 0xff
 }
 
+export const AFFINE_PREFIX = 'AFN:'
+
+export function deriveKey(userId: number): { a: number; b: number } {
+  const a = (userId % 127) * 2 + 3
+  const b = (userId * 37 + 11) % 256
+  return { a, b }
+}
+
 export function encrypt(plaintext: string, a: number, b: number): string {
   const bytes = new TextEncoder().encode(plaintext)
   const out = new Uint8Array(bytes.length)
   for (let i = 0; i < bytes.length; i++) {
     out[i] = encryptByte(bytes[i], a, b)
   }
-  return btoa(String.fromCharCode(...out))
+  return AFFINE_PREFIX + btoa(String.fromCharCode(...out))
 }
 
 export function decrypt(ciphertext: string, a: number, b: number): string {
+  const payload = ciphertext.startsWith(AFFINE_PREFIX)
+    ? ciphertext.slice(AFFINE_PREFIX.length)
+    : ciphertext
   const aInv = modInverse(a, 256)
-  const raw = atob(ciphertext)
+  const raw = atob(payload)
   const bytes = new Uint8Array(raw.length)
   for (let i = 0; i < raw.length; i++) {
     bytes[i] = decryptByte(raw.charCodeAt(i), aInv, b)
@@ -42,6 +53,7 @@ export function decrypt(ciphertext: string, a: number, b: number): string {
 }
 
 export function safeDecrypt(ciphertext: string, a: number, b: number): string {
+  if (!ciphertext.startsWith(AFFINE_PREFIX)) return ciphertext
   try {
     return decrypt(ciphertext, a, b)
   } catch {

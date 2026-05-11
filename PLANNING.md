@@ -854,14 +854,27 @@ El frontend cifra el texto plano con Cifrado Afín antes de enviarlo al backend.
 
 #### Implementación — Cifrado Afín manual (sin librerías)
 - Módulo `src/lib/afin.ts` implementado puramente en TypeScript:
-  - `encrypt(plaintext: string, a: number, b: number): string` — aplica `E(x) = (a·x + b) mod 256` byte a byte
-  - `decrypt(ciphertext: string, a: number, b: number): string` — aplica `D(y) = a⁻¹·(y − b) mod 256`
+  - `encrypt(plaintext: string, a: number, b: number): string` — aplica `E(x) = (a·x + b) mod 256` byte a byte; el resultado se serializa como `'AFN:' + Base64` para distinguir ciphertext de texto plano
+  - `decrypt(ciphertext: string, a: number, b: number): string` — aplica `D(y) = a⁻¹·(y − b) mod 256`; acepta tanto el formato `AFN:...` como Base64 crudo
+  - `safeDecrypt(ciphertext, a, b)` — si el string no empieza por `'AFN:'` lo devuelve sin tocar (compatibilidad con mensajes sin cifrar); si empieza, llama `decrypt` en try/catch
   - `modInverse(a: number, m: number): number` — inverso modular con algoritmo de Euclides extendido
-  - `isValidKey(a: number): boolean` — verifica que `gcd(a, 256) === 1` (a debe ser impar ≠ 1)
-- La clave `(a, b)` se negocia al inicio de sesión y se guarda en memoria (no en localStorage ni sessionStorage)
-- El texto cifrado se representa como string Base64 para transporte seguro
-- Integración en `ChatWindow` y `chatApi`: todo `content` enviado pasa por `afin.encrypt`; todo `content` recibido pasa por `afin.decrypt`
-- Tests unitarios de ida y vuelta (encrypt → decrypt = identidad) + mutation tests
+  - `isValidKey(a: number): boolean` — verifica que `a` sea impar y esté en `[3, 255]`
+  - `deriveKey(userId: number): { a, b }` — deriva clave **determinista** del ID de usuario: `a = (userId % 127) * 2 + 3` (siempre impar, rango `[3, 255]`), `b = (userId * 37 + 11) % 256`
+
+#### Gestión de clave
+- La clave `(a, b)` se deriva del `user.id` con `deriveKey` en el momento del login/registro y se guarda en `encryptionStore` (Zustand, sin persist).
+- Al recargar la página, `authStore` restaura el usuario desde `sessionStorage` y el callback `onRehydrateStorage` vuelve a llamar `deriveKey(user.id)` + `setKey`, de modo que la clave queda disponible antes de que el usuario envíe el primer mensaje.
+- Al hacer logout, `authStore.clearAuth` llama `encryptionStore.clearKey()`.
+- **Por qué clave derivada y no aleatoria**: con claves aleatorias por sesión, el mensaje cifrado por el usuario A no podría descifrarse por el usuario B (distinta clave). Al derivarla del `userId`, ambos usuarios pueden reconstruir la clave del emisor a partir de `senderId`, que viaja en el DTO de cada mensaje.
+
+#### Integración en envío y recepción
+- **Envío** (`ChatWindow.tsx`): `encryptContent(text)` lee `(a, b)` del `encryptionStore` y llama `encrypt`. Se aplica al `content` antes de `publish('/app/chat.send')` y antes de `chatApi.editMessage`.
+- **Recepción WS** (`useSocket.ts`): `decryptContent(content, senderId)` llama `deriveKey(senderId)` y luego `safeDecrypt`. Se usa en `toMessage()`, en `MESSAGE_EDITED` (busca el `senderId` en el store) y en `useAllChatsNotifications`.
+- **Historial** (`chatApi.ts`): `decryptMessage(msg)` llama `deriveKey(msg.senderId)` + `safeDecrypt` antes de retornar el DTO.
+- Solo el campo `content` se cifra; `type`, `attachments`, `reactions` y demás campos viajan en claro.
+
+#### Tests
+- `src/lib/afin.test.ts`: round-trip ASCII, multibyte, emojis; todos los valores impares en `[3,255]`; `safeDecrypt` con prefijo ausente; mutation test (byte adulterado → salida diferente).
 
 ---
 

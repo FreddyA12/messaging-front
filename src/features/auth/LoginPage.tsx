@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useEncryptionStore } from '../../store/encryptionStore'
+import { deriveKey } from '../../lib/afin'
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
@@ -79,10 +80,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(data)
       setAuth(res.user, res.accessToken, res.refreshToken)
-      const oddValues: number[] = []
-      for (let v = 3; v <= 255; v += 2) oddValues.push(v)
-      const a = oddValues[Math.floor(Math.random() * oddValues.length)]
-      const b = Math.floor(Math.random() * 256)
+      const { a, b } = deriveKey(res.user.id)
       useEncryptionStore.getState().setKey(a, b)
       navigate('/')
     } catch (err: unknown) {
