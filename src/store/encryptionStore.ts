@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { isValidKey } from '../lib/afin'
 
 interface EncryptionState {
@@ -8,14 +9,22 @@ interface EncryptionState {
   clearKey: () => void
 }
 
-export const useEncryptionStore = create<EncryptionState>()((set) => ({
-  a: null,
-  b: null,
+export const useEncryptionStore = create<EncryptionState>()(
+  persist(
+    (set) => ({
+      a: null,
+      b: null,
 
-  setKey: (a, b) => {
-    if (!isValidKey(a)) throw new Error(`Invalid affine key: a=${a}`)
-    set({ a, b })
-  },
+      setKey: (a, b) => {
+        if (!isValidKey(a)) throw new Error(`Invalid affine key: a=${a}`)
+        set({ a, b })
+      },
 
-  clearKey: () => set({ a: null, b: null }),
-}))
+      clearKey: () => set({ a: null, b: null }),
+    }),
+    {
+      name: 'encryption-key',
+      storage: createJSONStorage(() => sessionStorage),
+    },
+  ),
+)

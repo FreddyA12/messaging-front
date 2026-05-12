@@ -10,6 +10,8 @@ export interface ChatListItem {
   lastMessageAt: string | null
   unreadCount: number
   otherUserId?: number
+  isArchived?: boolean
+  isPinned?: boolean
 }
 
 export interface Message {
@@ -83,6 +85,10 @@ interface ChatState {
   removeMessage: (messageId: number) => void
   markViewedOnce: (messageId: number) => void
   updateMessagePoll: (messageId: number, poll: PollDTO) => void
+  setChatArchived: (chatId: number, isArchived: boolean) => void
+  setChatPinned: (chatId: number, isPinned: boolean) => void
+  removeChat: (chatId: number) => void
+  markChatUnread: (chatId: number) => void
 }
 
 function mapAllMessages(
@@ -123,8 +129,30 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       chats: s.chats.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c)),
     })),
-  setMessages: (chatId, messages) =>
-    set((s) => ({ messages: { ...s.messages, [chatId]: messages } })),
+  setMessages: (chatId, incoming) =>
+    set((s) => {
+      const existing = s.messages[chatId]
+      if (!existing || existing.length === 0) {
+        return { messages: { ...s.messages, [chatId]: incoming } }
+      }
+      const prevById = new Map(existing.map((m) => [m.id, m]))
+      const merged = incoming.map((m) => {
+        const prev = prevById.get(m.id)
+        if (!prev) return m
+        // Keep any readBy/deliveredTo entries from the local store that the server
+        // hasn't persisted yet (sent via WS before DB commit).
+        const readBy = prev.readBy.length > m.readBy.length
+          ? [...new Set([...prev.readBy, ...m.readBy])]
+          : m.readBy
+        const deliveredTo = prev.deliveredTo.length > m.deliveredTo.length
+          ? [...new Set([...prev.deliveredTo, ...m.deliveredTo])]
+          : m.deliveredTo
+        return readBy === m.readBy && deliveredTo === m.deliveredTo
+          ? m
+          : { ...m, readBy, deliveredTo }
+      })
+      return { messages: { ...s.messages, [chatId]: merged } }
+    }),
   addMessage: (message) =>
     set((s) => {
       const existing = s.messages[message.chatId] ?? []
@@ -265,6 +293,29 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: mapAllMessages(s.messages, (m) =>
         m.id === messageId ? { ...m, poll } : m,
+      ),
+    })),
+  setChatArchived: (chatId, isArchived) =>
+    set((s) => ({
+      chats: s.chats.map((c) => c.id === chatId ? { ...c, isArchived } : c),
+    })),
+  setChatPinned: (chatId, isPinned) =>
+    set((s) => ({
+      chats: s.chats.map((c) => c.id === chatId ? { ...c, isPinned } : c),
+    })),
+  removeChat: (chatId) =>
+    set((s) => {
+      const { [chatId]: _dropped, ...remainingMessages } = s.messages
+      return {
+        chats: s.chats.filter((c) => c.id !== chatId),
+        activeChatId: s.activeChatId === chatId ? null : s.activeChatId,
+        messages: remainingMessages,
+      }
+    }),
+  markChatUnread: (chatId) =>
+    set((s) => ({
+      chats: s.chats.map((c) =>
+        c.id === chatId ? { ...c, unreadCount: Math.max(c.unreadCount, 1) } : c,
       ),
     })),
 }))

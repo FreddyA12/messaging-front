@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useAuth } from '../../hooks/useAuth'
+import { UserAvatar } from '../../components/UserAvatar'
 import {
   useAppearanceStore, PALETTES, CHAT_BACKGROUNDS, PATTERN_BACKGROUNDS,
   type ThemeMode, type ChatBg, type Palette, type FontSize,
@@ -200,7 +201,7 @@ function ProfileSection() {
             {!avatarFailed && user?.id
               ? <img
                   key={avatarBust}
-                  src={`/api/users/${user.id}/avatar?t=${avatarBust}`}
+                  src={`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/api/users/${user.id}/avatar?t=${avatarBust}`}
                   alt="avatar"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={() => setAvatarFailed(true)}
@@ -630,9 +631,7 @@ export function SettingsPage() {
 
           {/* User mini card */}
           <div className="settings-sidebar-usercard" style={{ padding: '14px 18px', borderBottom: `1px solid ${c.borderSoft}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,var(--color-primary,#7a9048),#91a662)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 18, boxShadow: '0 3px 12px rgba(122,144,72,0.3)', flexShrink: 0 }}>
-              {user?.name?.[0]?.toUpperCase()}
-            </div>
+            <UserAvatar userId={user?.id} name={user?.name ?? 'U'} size={44} style={{ boxShadow: '0 3px 12px rgba(122,144,72,0.3)', flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name}</p>
               <p style={{ fontSize: 11, color: c.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</p>

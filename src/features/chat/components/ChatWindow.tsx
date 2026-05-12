@@ -317,11 +317,8 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     stopTyping()
 
     const { a, b } = useEncryptionStore.getState()
-    const encryptContent = (text: string) => {
-      const result = text && a !== null && b !== null ? encrypt(text, a, b) : text
-      console.log('[ENCRYPT] key:', { a, b }, '| plain:', text, '| cipher:', result)
-      return result
-    }
+    const encryptContent = (text: string) =>
+      text && a !== null && b !== null ? encrypt(text, a, b) : text
 
     if (editingMessage) {
       await chatApi.editMessage(editingMessage.id, encryptContent(content))

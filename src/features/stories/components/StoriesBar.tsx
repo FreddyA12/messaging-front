@@ -6,6 +6,7 @@ import { StoryViewer } from './StoryViewer'
 import { CreateStoryDialog } from './CreateStoryDialog'
 import { StoryPrivacyDialog } from './StoryPrivacyDialog'
 import type { StoryUserGroupDTO } from '../../../types/story'
+import { UserAvatar } from '../../../components/UserAvatar'
 
 const AVATAR_COLORS = [
   'bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500',
@@ -78,10 +79,8 @@ export function StoriesBar() {
                     : 'rgba(122,144,72,0.15)',
                 }}
               >
-                <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-base font-semibold text-gray-600 dark:text-gray-300">
-                    {currentUser?.name?.[0]?.toUpperCase() ?? '?'}
-                  </span>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center relative overflow-hidden">
+                  <UserAvatar userId={currentUser?.id} name={currentUser?.name ?? 'U'} size={40} />
                   {!hasMyStories && (
                     <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                       <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,10 +133,7 @@ export function StoriesBar() {
                   : 'rgba(200,200,200,0.5)',
               }}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm
-                              ${avatarColor(group.userName)}`}>
-                {group.userName[0].toUpperCase()}
-              </div>
+              <UserAvatar userId={group.userId} name={group.userName} size={40} />
             </div>
             <span className="text-[10px] text-gray-500 dark:text-gray-400 w-12 text-center truncate leading-tight">
               {group.userName.split(' ')[0]}

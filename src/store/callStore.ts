@@ -25,9 +25,12 @@ export interface PendingOutgoingCall {
 interface CallState {
   call: ActiveCall | null
   pendingStart: PendingOutgoingCall | null
+  missedCallsCount: number
 
   requestOutgoingCall: (data: PendingOutgoingCall) => void
   clearPendingStart: () => void
+  setMissedCallsCount: (n: number) => void
+  clearMissedCalls: () => void
   startOutgoing: (data: {
     callId: number
     type: CallType
@@ -51,10 +54,12 @@ interface CallState {
 export const useCallStore = create<CallState>((set) => ({
   call: null,
   pendingStart: null,
+  missedCallsCount: 0,
 
   requestOutgoingCall: (data) => set({ pendingStart: data }),
-
   clearPendingStart: () => set({ pendingStart: null }),
+  setMissedCallsCount: (n) => set({ missedCallsCount: n }),
+  clearMissedCalls: () => set({ missedCallsCount: 0 }),
 
   startOutgoing: ({ callId, type, peerId, peerName }) =>
     set({

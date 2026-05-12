@@ -1,13 +1,11 @@
 import { api } from '../../lib/axios'
-import { safeDecrypt, deriveKey } from '../../lib/afin'
+import { safeDecrypt, deriveKey, AFFINE_PREFIX } from '../../lib/afin'
 import type { ChatDTO, GroupMemberDTO, MessageDTO, PollDTO, SendMessageRequest } from '../../types/chat'
 
 function decryptMessage(msg: MessageDTO): MessageDTO {
   const { a, b } = deriveKey(msg.senderId)
-  const decryptedContent = msg.content ? safeDecrypt(msg.content, a, b) : msg.content
-  console.log('[DECRYPT] senderId:', msg.senderId, '| key:', { a, b }, '| raw:', msg.content, '| plain:', decryptedContent)
   const decrypted = msg.content
-    ? { ...msg, content: decryptedContent }
+    ? { ...msg, content: safeDecrypt(msg.content, a, b) }
     : msg
   return {
     ...decrypted,
@@ -36,10 +34,47 @@ export interface CreateGroupRequest {
 
 export const chatApi = {
   getChats: () =>
-    api.get<ChatDTO[]>('/api/chats').then((r) => r.data),
+    api.get<ChatDTO[]>('/api/chats').then((r) =>
+      r.data.map((chat) => {
+        if (!chat.lastMessage) return chat
+
+        if (chat.lastMessageSenderId != null) {
+          const { a, b } = deriveKey(chat.lastMessageSenderId)
+          return { ...chat, lastMessage: safeDecrypt(chat.lastMessage, a, b) }
+        }
+
+        // No senderId available — hide raw ciphertext rather than show garbage
+        if (chat.lastMessage.startsWith(AFFINE_PREFIX)) {
+          return { ...chat, lastMessage: null }
+        }
+
+        return chat
+      })
+    ),
 
   createPrivateChat: (userId: number) =>
     api.post<ChatDTO>('/api/chats', { userId }).then((r) => r.data),
+
+  archiveChat: (chatId: number) =>
+    api.patch(`/api/chats/${chatId}/archive`),
+
+  unarchiveChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/archive`),
+
+  pinChat: (chatId: number) =>
+    api.patch(`/api/chats/${chatId}/pin`),
+
+  unpinChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/pin`),
+
+  muteChat: (chatId: number, minutes: number) =>
+    api.patch(`/api/chats/${chatId}/mute`, null, { params: { minutes } }),
+
+  unmuteChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}/mute`),
+
+  deleteChat: (chatId: number) =>
+    api.delete(`/api/chats/${chatId}`),
 
   getMessages: (chatId: number, cursor?: string, limit = 50) =>
     api
@@ -118,12 +153,6 @@ export const chatApi = {
 
   leaveGroup: (chatId: number) =>
     api.delete(`/api/chats/${chatId}`),
-
-  muteChat: (chatId: number, minutes: number) =>
-    api.patch(`/api/chats/${chatId}/mute`, null, { params: { minutes } }),
-
-  unmuteChat: (chatId: number) =>
-    api.delete(`/api/chats/${chatId}/mute`),
 
   exportChat: (chatId: number) =>
     api.get(`/api/chats/${chatId}/export`, { responseType: 'blob' }).then((r) => r.data as Blob),

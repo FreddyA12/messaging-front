@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useChatStore } from '../../../store/chatStore'
 import { storiesApi } from '../api'
+import { UserAvatar } from '../../../components/UserAvatar'
 
 interface Props {
   onClose: () => void
@@ -109,15 +110,7 @@ export function StoryPrivacyDialog({ onClose }: Props) {
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(122,144,72,0.06)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
                 >
-                  {/* Avatar */}
-                  <div style={{
-                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                    background: 'linear-gradient(135deg, #7a9048, #91a662)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontWeight: 700, fontSize: 15,
-                  }}>
-                    {c.name[0]?.toUpperCase()}
-                  </div>
+                  <UserAvatar userId={c.id} name={c.name} size={38} />
 
                   <span style={{ flex: 1, fontSize: 14, color: '#242d16', fontWeight: 500 }}>
                     {c.name}

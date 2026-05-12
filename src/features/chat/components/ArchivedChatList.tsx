@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useChatStore } from '../../../store/chatStore'
 import { chatApi } from '../api'
-import { NewChatModal } from './NewChatModal'
-import { CreateGroupDialog } from './CreateGroupDialog'
 import { UserAvatar } from '../../../components/UserAvatar'
 import type { ChatListItem } from '../../../store/chatStore'
 
@@ -21,19 +19,6 @@ function formatTime(iso: string | null): string {
   return date.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-function ChatItemSkeleton() {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
-      <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 shrink-0" />
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-2/5" />
-        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/5" />
-      </div>
-    </div>
-  )
-}
-
-/* ─── Mute duration options ──────────────────────────────────────────────────── */
 const MUTE_OPTIONS = [
   { label: '1 hora', minutes: 60 },
   { label: '8 horas', minutes: 480 },
@@ -44,7 +29,6 @@ const MUTE_OPTIONS = [
 interface ContextMenuState {
   chatId: number
   chatType: 'PRIVATE' | 'GROUP'
-  isArchived: boolean
   isPinned: boolean
   x: number
   y: number
@@ -57,25 +41,18 @@ interface ConfirmDialog {
   onConfirm: () => void
 }
 
-export function ChatList() {
+interface ArchivedChatListProps {
+  onSwitchToChats: () => void
+}
+
+export function ArchivedChatList({ onSwitchToChats }: ArchivedChatListProps) {
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [showGroupDialog, setShowGroupDialog] = useState(false)
+  const { chats, activeChatId, setActiveChat, setChatArchived, setChatPinned, removeChat, markChatUnread } = useChatStore()
+  const archivedChats = chats.filter((c) => c.isArchived)
+
   const [ctx, setCtx] = useState<ContextMenuState | null>(null)
   const [confirm, setConfirm] = useState<ConfirmDialog | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-
-  const { chats, activeChatId, setChats, setActiveChat, setChatArchived, setChatPinned, removeChat, markChatUnread } = useChatStore()
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['chats'],
-    queryFn: () => chatApi.getChats(),
-  })
-
-  useEffect(() => {
-    if (data) setChats(data)
-  }, [data, setChats])
 
   // Close context menu on outside click
   useEffect(() => {
@@ -93,7 +70,6 @@ export function ChatList() {
     setCtx({
       chatId: chat.id,
       chatType: chat.type,
-      isArchived: !!chat.isArchived,
       isPinned: !!chat.isPinned,
       x: e.clientX,
       y: e.clientY,
@@ -102,17 +78,17 @@ export function ChatList() {
   }
 
   /* ── Context menu actions ── */
-  const doArchive = async () => {
+  const doUnarchive = async () => {
     if (!ctx) return
-    const { chatId, isArchived } = ctx
+    const { chatId } = ctx
     setCtx(null)
     try {
-      if (isArchived) await chatApi.unarchiveChat(chatId)
-      else { await chatApi.archiveChat(chatId); if (activeChatId === chatId) setActiveChat(null) }
-      setChatArchived(chatId, !isArchived)
+      await chatApi.unarchiveChat(chatId)
+      setChatArchived(chatId, false)
       queryClient.setQueryData(['chats'], (old: ChatListItem[] | undefined) =>
-        old?.map((c) => c.id === chatId ? { ...c, isArchived: !isArchived } : c) ?? []
+        old?.map((c) => c.id === chatId ? { ...c, isArchived: false } : c) ?? []
       )
+      onSwitchToChats()
     } catch { /* silent */ }
   }
 
@@ -170,76 +146,15 @@ export function ChatList() {
     })
   }
 
-  /* ── Sort: pinned first, then by lastMessageAt ── */
-  const visibleChats = chats
-    .filter((c) => !c.isArchived && (c.name ?? '').toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1
-      return (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '')
-    })
-
-  const renderChatItem = (chat: ChatListItem) => (
-    <button
-      key={chat.id}
-      onClick={() => setActiveChat(chat.id)}
-      onContextMenu={(e) => openCtx(e, chat)}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors relative
-        ${activeChatId === chat.id
-          ? 'bg-primary-50 dark:bg-primary-900/20'
-          : 'hover:bg-gray-50 dark:hover:bg-gray-800/60'
-        }`}
-    >
-      {/* Pin indicator */}
-      {chat.isPinned && (
-        <span style={{
-          position: 'absolute', top: 6, right: 8,
-          fontSize: 10, color: '#9aaa82',
-        }}>
-          📌
-        </span>
-      )}
-      <UserAvatar
-        userId={chat.type === 'PRIVATE' ? chat.otherUserId : undefined}
-        name={chat.name ?? '?'}
-        size={48}
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-sm truncate text-gray-900 dark:text-gray-100">
-            {chat.name}
-          </span>
-          <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-            {formatTime(chat.lastMessageAt)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2 mt-0.5">
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-            {chat.lastMessage ?? <span className="italic text-gray-400">Sin mensajes</span>}
-          </p>
-          {chat.unreadCount > 0 && (
-            <span className="shrink-0 min-w-[20px] h-5 rounded-full bg-primary-500 text-white text-xs font-semibold flex items-center justify-center px-1">
-              {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-            </span>
-          )}
-        </div>
-      </div>
-    </button>
-  )
-
-  /* ── Context menu positioning: flip up if near bottom ── */
+  /* ── Context menu positioning ── */
   const ctxStyle = (): React.CSSProperties => {
     if (!ctx) return {}
-    const MENU_H = 340
+    const MENU_H = 300
     const top = ctx.y + MENU_H > window.innerHeight ? ctx.y - MENU_H : ctx.y
     return { position: 'fixed', top, left: ctx.x, zIndex: 1000 }
   }
 
-  const menuItem = (
-    label: string,
-    icon: React.ReactNode,
-    onClick: () => void,
-    danger = false,
-  ) => (
+  const menuItem = (label: string, icon: React.ReactNode, onClick: () => void, danger = false) => (
     <button
       onClick={onClick}
       style={{
@@ -258,60 +173,78 @@ export function ChatList() {
     </button>
   )
 
+  if (archivedChats.length === 0) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 12, padding: '48px 24px', color: '#9aaa82',
+        fontFamily: "'Poppins',system-ui,sans-serif",
+      }}>
+        <svg width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8" />
+        </svg>
+        <p style={{ fontSize: 14, margin: 0 }}>No hay chats archivados</p>
+      </div>
+    )
+  }
+
   return (
     <>
-      <div className="flex flex-col h-full">
-        {/* Search bar + buttons */}
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-          <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
-              fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar chats..."
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 rounded-full
-                         text-gray-900 dark:text-gray-100 placeholder-gray-400
-                         focus:outline-none focus:ring-2 focus:ring-primary-500 transition"
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {archivedChats.map((chat) => (
+          <button
+            key={chat.id}
+            onClick={() => setActiveChat(chat.id)}
+            onContextMenu={(e) => openCtx(e, chat)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 16px', border: 'none', textAlign: 'left',
+              background: activeChatId === chat.id ? 'rgba(122,144,72,0.1)' : 'none',
+              cursor: 'pointer', fontFamily: "'Poppins',system-ui,sans-serif",
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => { if (activeChatId !== chat.id) e.currentTarget.style.background = 'rgba(122,144,72,0.06)' }}
+            onMouseLeave={(e) => { if (activeChatId !== chat.id) e.currentTarget.style.background = 'none' }}
+          >
+            <UserAvatar
+              userId={chat.type === 'PRIVATE' ? chat.otherUserId : undefined}
+              name={chat.name ?? '?'}
+              size={48}
             />
-          </div>
-          <button
-            onClick={() => setShowGroupDialog(true)}
-            title="Nuevo grupo"
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            title="Nuevo chat"
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Chat list */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          {isLoading
-            ? Array.from({ length: 7 }).map((_, i) => <ChatItemSkeleton key={i} />)
-            : visibleChats.length === 0
-              ? (
-                <p className="text-center text-sm text-gray-400 dark:text-gray-500 mt-10 px-4">
-                  {search ? 'Sin resultados' : 'Aún no tienes chats'}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 14, fontWeight: 500, color: 'var(--color-text)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {chat.name ?? '?'}
+                </span>
+                <span style={{ fontSize: 11, color: '#9aaa82', flexShrink: 0 }}>
+                  {formatTime(chat.lastMessageAt)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <p style={{
+                  fontSize: 12, color: '#9aaa82', margin: 0,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                }}>
+                  {chat.lastMessage ?? <span style={{ fontStyle: 'italic' }}>Sin mensajes</span>}
                 </p>
-              )
-              : visibleChats.map(renderChatItem)
-          }
-        </div>
+                {chat.unreadCount > 0 && (
+                  <span style={{
+                    flexShrink: 0, minWidth: 20, height: 20, borderRadius: 10,
+                    background: '#7a9048', color: '#fff',
+                    fontSize: 11, fontWeight: 600,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+                  }}>
+                    {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* ── Context menu ── */}
@@ -329,13 +262,13 @@ export function ChatList() {
             fontFamily: "'Poppins',system-ui,sans-serif",
           }}
         >
-          {/* Archive */}
+          {/* Unarchive */}
           {menuItem(
-            ctx.isArchived ? 'Desarchivar chat' : 'Archivar chat',
+            'Desarchivar chat',
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8m-9 4h4" />
             </svg>,
-            doArchive,
+            doUnarchive,
           )}
 
           {/* Mute */}
@@ -455,9 +388,6 @@ export function ChatList() {
           </div>
         </div>
       )}
-
-      {showModal && <NewChatModal onClose={() => setShowModal(false)} />}
-      {showGroupDialog && <CreateGroupDialog onClose={() => setShowGroupDialog(false)} />}
     </>
   )
 }

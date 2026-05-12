@@ -5,6 +5,7 @@ import { storiesApi } from '../api'
 import { CreateStoryDialog } from './CreateStoryDialog'
 import { StoryPrivacyDialog } from './StoryPrivacyDialog'
 import type { StoryUserGroupDTO } from '../../../types/story'
+import { UserAvatar } from '../../../components/UserAvatar'
 
 interface Props {
   onSelectGroup: (groups: StoryUserGroupDTO[], groupIdx: number) => void
@@ -78,13 +79,7 @@ export function StoriesList({ onSelectGroup }: Props) {
                     ? 'linear-gradient(135deg,#7a9048,#91a662)'
                     : 'rgba(122,144,72,0.2)',
                 }}>
-                  <div style={{
-                    width: '100%', height: '100%', borderRadius: '50%',
-                    background: '#e8ecda', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#7a9048',
-                  }}>
-                    {currentUser?.name?.[0]?.toUpperCase()}
-                  </div>
+                  <UserAvatar userId={currentUser?.id} name={currentUser?.name ?? 'U'} size={48} />
                 </div>
                 {myStories.length === 0 && (
                   <div style={{
@@ -152,13 +147,7 @@ export function StoriesList({ onSelectGroup }: Props) {
                     ? 'linear-gradient(135deg,#7a9048,#91a662)'
                     : 'rgba(180,180,180,0.35)',
                 }}>
-                  <div style={{
-                    width: '100%', height: '100%', borderRadius: '50%',
-                    background: '#7a9048', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff',
-                  }}>
-                    {group.userName[0].toUpperCase()}
-                  </div>
+                  <UserAvatar userId={group.userId} name={group.userName} size={48} />
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>

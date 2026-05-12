@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { connectSocket, disconnectSocket, subscribe, publish } from '../lib/socket'
+import { connectSocket, disconnectSocket, subscribe, onSocketConnect, publish } from '../lib/socket'
 import { useChatStore, type Message } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
 import { safeDecrypt, deriveKey } from '../lib/afin'
 import { chatApi } from '../features/chat/api'
-import type { StompSubscription } from '@stomp/stompjs'
+import { useQueryClient } from '@tanstack/react-query'
 import type {
   ChatSocketEvent,
   UserOnlineEvent,
@@ -43,18 +43,17 @@ function toMessage(dto: MessageDTO): Message {
 }
 
 export function useSocket() {
-  const connected = useRef(false)
   const setPresence = useChatStore((s) => s.setPresence)
   const markDelivered = useChatStore((s) => s.markDelivered)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
-    let presenceSub: StompSubscription | null = null
-    let deliverySub: StompSubscription | null = null
+    let presenceSub: ReturnType<typeof subscribe> | null = null
+    let deliverySub: ReturnType<typeof subscribe> | null = null
+    let chatEventsSub: ReturnType<typeof subscribe> | null = null
 
     connectSocket()
       .then(() => {
-        connected.current = true
-
         presenceSub = subscribe('/topic/presence', (body) => {
           const event = body as UserOnlineEvent | UserOfflineEvent
           if (event.type === 'USER_ONLINE') {
@@ -70,16 +69,41 @@ export function useSocket() {
             markDelivered(event.payload.messageId, event.payload.userId)
           }
         })
+
+        // Personal feed: fires for every new message in any chat the user belongs to.
+        // Used to detect chats not currently in the store (new or previously deleted).
+        // For chats already in the store, /topic/chat.{id} subscriptions handle updates.
+        chatEventsSub = subscribe('/user/queue/chat-events', (body) => {
+          const event = body as ChatSocketEvent
+          if (event.type !== 'MESSAGE_NEW') return
+
+          const { chats } = useChatStore.getState()
+          const chatInStore = chats.some((c) => c.id === event.payload.chatId)
+
+          if (!chatInStore) {
+            // New or previously-deleted chat — refetch the list so it reappears.
+            // Also drop any stale message cache so the ChatWindow fetches fresh.
+            queryClient.invalidateQueries({ queryKey: ['chats'] })
+            queryClient.removeQueries({ queryKey: ['messages', event.payload.chatId] })
+          }
+        })
       })
       .catch((err) => console.error('Socket connection failed:', err))
+
+    // On every (re)connect: refetch the chat list so new chats appear
+    // and subscriptions in useAllChatsNotifications get re-registered
+    const unregister = onSocketConnect(() => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+    })
 
     return () => {
       presenceSub?.unsubscribe()
       deliverySub?.unsubscribe()
+      chatEventsSub?.unsubscribe()
+      unregister()
       disconnectSocket()
-      connected.current = false
     }
-  }, [setPresence, markDelivered])
+  }, [setPresence, markDelivered, queryClient])
 }
 
 export function useChatSubscription(chatId: number | null) {
@@ -96,9 +120,9 @@ export function useChatSubscription(chatId: number | null) {
 
   useEffect(() => {
     if (!chatId) return
-    let mainSub: StompSubscription | null = null
-    let typingSub: StompSubscription | null = null
-    let readSub: StompSubscription | null = null
+    let mainSub: ReturnType<typeof subscribe> | null = null
+    let typingSub: ReturnType<typeof subscribe> | null = null
+    let readSub: ReturnType<typeof subscribe> | null = null
 
     connectSocket()
       .then(() => {
@@ -177,14 +201,14 @@ export function useChatSubscription(chatId: number | null) {
 export function useAllChatsNotifications(chatIds: number[]) {
   const updateLastMessage = useChatStore((s) => s.updateLastMessage)
   const incrementUnread = useChatStore((s) => s.incrementUnread)
+  const addMessage = useChatStore((s) => s.addMessage)
 
-  // Stable string key so the effect only re-runs when the set of IDs actually changes
   const idsKey = chatIds.slice().sort((a, b) => a - b).join(',')
 
   useEffect(() => {
     if (chatIds.length === 0) return
 
-    const subs: (StompSubscription | null)[] = []
+    const subs: ReturnType<typeof subscribe>[] = []
 
     connectSocket()
       .then(() => {
@@ -196,9 +220,16 @@ export function useAllChatsNotifications(chatIds: number[]) {
             const currentUserId = useAuthStore.getState().user?.id
             const activeChatId = useChatStore.getState().activeChatId
 
-            updateLastMessage(event.payload.chatId, decryptContent(event.payload.content, event.payload.senderId), event.payload.createdAt)
+            const decrypted = decryptContent(event.payload.content, event.payload.senderId)
+            updateLastMessage(event.payload.chatId, decrypted, event.payload.createdAt)
 
-            // Show badge only for messages from others in non-active chats
+            // If the chat is not currently open, add the message directly to the store
+            // so it appears instantly when the user clicks into it (no reload needed).
+            // The active chat is handled by useChatSubscription — skip to avoid duplicates.
+            if (event.payload.chatId !== activeChatId) {
+              addMessage(toMessage(event.payload))
+            }
+
             if (
               event.payload.senderId !== currentUserId &&
               event.payload.chatId !== activeChatId
@@ -211,9 +242,9 @@ export function useAllChatsNotifications(chatIds: number[]) {
       })
       .catch(console.error)
 
-    return () => subs.forEach((s) => s?.unsubscribe())
+    return () => subs.forEach((s) => s.unsubscribe())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, updateLastMessage, incrementUnread])
+  }, [idsKey, updateLastMessage, incrementUnread, addMessage])
 }
 
 export function publishTypingStart(chatId: number, userId: number, userName: string): void {

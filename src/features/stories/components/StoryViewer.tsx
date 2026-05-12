@@ -3,6 +3,7 @@ import type { StoryDTO, StoryUserGroupDTO } from '../../../types/story'
 import { storiesApi } from '../api'
 import { useStoryStore } from '../../../store/storyStore'
 import { api } from '../../../lib/axios'
+import { UserAvatar } from '../../../components/UserAvatar'
 
 const STORY_DURATION_MS = 5000 // 5 s per story
 
@@ -163,9 +164,7 @@ export function StoryViewer({ groups, initialGroupIndex, onClose }: Props) {
         {/* Header */}
         <div className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-4 pt-2">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-white text-sm font-bold">
-              {group.userName[0].toUpperCase()}
-            </div>
+            <UserAvatar userId={group.userId} name={group.userName} size={32} />
             <div>
               <p className="text-white text-sm font-semibold leading-tight">{group.userName}</p>
               <p className="text-white/70 text-xs">{formatTimeLeft(story.expiresAt)}</p>

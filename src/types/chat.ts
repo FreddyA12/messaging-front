@@ -54,6 +54,7 @@ export interface ChatDTO {
   description?: string | null
   avatarUrl: string | null
   lastMessage: string | null
+  lastMessageSenderId?: number | null
   lastMessageAt: string | null
   unreadCount: number
   otherUserId?: number
