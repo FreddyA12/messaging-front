@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useChatStore } from '../../../store/chatStore'
 import { chatApi } from '../api'
 import { NewChatModal } from './NewChatModal'
@@ -58,6 +58,7 @@ interface ConfirmDialog {
 }
 
 export function ChatList() {
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [showGroupDialog, setShowGroupDialog] = useState(false)
@@ -109,6 +110,9 @@ export function ChatList() {
       if (isArchived) await chatApi.unarchiveChat(chatId)
       else { await chatApi.archiveChat(chatId); if (activeChatId === chatId) setActiveChat(null) }
       setChatArchived(chatId, !isArchived)
+      queryClient.setQueryData(['chats'], (old: ChatListItem[] | undefined) =>
+        old?.map((c) => c.id === chatId ? { ...c, isArchived: !isArchived } : c) ?? []
+      )
     } catch { /* silent */ }
   }
 
@@ -158,6 +162,9 @@ export function ChatList() {
         try {
           await chatApi.deleteChat(chatId)
           removeChat(chatId)
+          queryClient.setQueryData(['chats'], (old: ChatListItem[] | undefined) =>
+            old?.filter((c) => c.id !== chatId) ?? []
+          )
         } catch { /* silent */ }
       },
     })
@@ -165,7 +172,7 @@ export function ChatList() {
 
   /* ── Sort: pinned first, then by lastMessageAt ── */
   const visibleChats = chats
-    .filter((c) => !c.isArchived && c.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((c) => !c.isArchived && (c.name ?? '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1
       return (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '')
@@ -193,7 +200,7 @@ export function ChatList() {
       )}
       <UserAvatar
         userId={chat.type === 'PRIVATE' ? chat.otherUserId : undefined}
-        name={chat.name}
+        name={chat.name ?? '?'}
         size={48}
       />
       <div className="flex-1 min-w-0">

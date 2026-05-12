@@ -42,16 +42,23 @@ export function MainLayout() {
   const [section, setSection] = useState<Section>('chats')
   const [activeStory, setActiveStory] = useState<{ groups: StoryUserGroupDTO[]; groupIdx: number } | null>(null)
 
-  const { setMissedCallsCount, clearMissedCalls } = useCallStore()
+  const { setMissedCallsCount, clearMissedCalls, missedCallsCount } = useCallStore()
   const currentUserId = user?.id
 
-  // Fetch call history once on mount to count missed calls for the badge
+  // Count only missed calls newer than the last time the user opened the calls section
   useEffect(() => {
+    const lastViewedStr = localStorage.getItem('calls_last_viewed_at')
+    const lastViewed = lastViewedStr ? new Date(lastViewedStr) : null
+
     callApi.history()
       .then((calls) => {
-        const missed = calls.filter(
-          (c) => c.calleeId === currentUserId && (c.status === 'MISSED' || c.status === 'REJECTED'),
-        ).length
+        const missed = calls.filter((c) => {
+          if (c.calleeId !== currentUserId) return false
+          if (c.status !== 'MISSED' && c.status !== 'REJECTED') return false
+          if (!lastViewed) return true
+          const callTime = c.endedAt ?? c.startedAt
+          return callTime ? new Date(callTime) > lastViewed : true
+        }).length
         setMissedCallsCount(missed)
       })
       .catch(() => {})
@@ -65,7 +72,10 @@ export function MainLayout() {
     setSection(s)
     if (s !== 'stories') setActiveStory(null)
     if (s !== 'chats') setActiveChat(null)
-    if (s === 'calls') clearMissedCalls()
+    if (s === 'calls') {
+      localStorage.setItem('calls_last_viewed_at', new Date().toISOString())
+      clearMissedCalls()
+    }
   }
 
   /* On mobile: sidebar hides when a chat is open, or when in stories with a story selected */
@@ -136,7 +146,7 @@ export function MainLayout() {
             {section === 'chats' && <ChatList />}
             {section === 'stories' && <StoriesList onSelectGroup={handleSelectGroup} />}
             {section === 'calls' && <CallHistoryList />}
-            {section === 'archived' && <ArchivedChatList />}
+            {section === 'archived' && <ArchivedChatList onSwitchToChats={() => handleSectionChange('chats')} />}
           </div>
 
           {/* ── Footer ── */}
@@ -214,6 +224,7 @@ export function MainLayout() {
           <BottomNavBtn
             active={section === 'calls'}
             label="Llamadas"
+            badge={missedCallsCount}
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -251,12 +262,13 @@ export function MainLayout() {
 }
 
 function BottomNavBtn({
-  active, label, icon, onClick,
+  active, label, icon, onClick, badge = 0,
 }: {
   active: boolean
   label: string
   icon: React.ReactNode
   onClick: () => void
+  badge?: number
 }) {
   return (
     <button
@@ -266,9 +278,24 @@ function BottomNavBtn({
         background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
         color: active ? '#7a9048' : '#9aaa82',
         fontFamily: "'Poppins',system-ui,sans-serif",
+        position: 'relative',
       }}
     >
-      {icon}
+      <div style={{ position: 'relative' }}>
+        {icon}
+        {badge > 0 && (
+          <span style={{
+            position: 'absolute', top: -4, right: -6,
+            minWidth: 16, height: 16, borderRadius: 8,
+            background: '#c0392b', color: '#fff',
+            fontSize: 9, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 3px',
+          }}>
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </div>
       <span style={{ fontSize: 10, fontWeight: active ? 600 : 400 }}>{label}</span>
     </button>
   )

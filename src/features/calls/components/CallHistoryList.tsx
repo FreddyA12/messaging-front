@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { callApi } from '../api'
-import { useChatStore } from '../../../store/chatStore'
+import { useCallStore } from '../../../store/callStore'
 import { useAuthStore } from '../../../store/authStore'
 import type { CallDTO } from '../../../types/call'
 import { UserAvatar } from '../../../components/UserAvatar'
@@ -40,7 +40,7 @@ export function CallHistoryList() {
   const [calls, setCalls] = useState<CallDTO[]>([])
   const [loading, setLoading] = useState(true)
   const currentUserId = useAuthStore((s) => s.user?.id)
-  const setActiveChat = useChatStore((s) => s.setActiveChat)
+  const requestOutgoingCall = useCallStore((s) => s.requestOutgoingCall)
 
   useEffect(() => {
     callApi.history()
@@ -82,36 +82,31 @@ export function CallHistoryList() {
         const isCaller = call.callerId === currentUserId
         const peerId = isCaller ? call.calleeId : call.callerId
         const peerName = isCaller ? call.calleeName : call.callerName
-        const missed = call.status === 'MISSED' || (call.status === 'REJECTED' && !isCaller)
+        // Only the callee can have a missed call; outgoing unanswered calls are just "Saliente"
+        const missed = !isCaller && (call.status === 'MISSED' || call.status === 'REJECTED')
         const callTime = call.endedAt ?? call.startedAt
         const arrowColor = missed ? '#c0392b' : '#7a9048'
         const labelColor = missed ? '#c0392b' : '#8a9a7a'
 
         return (
-          <button
+          <div
             key={call.id}
-            onClick={() => { if (call.chatId) setActiveChat(call.chatId) }}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-              padding: '10px 16px', border: 'none', background: 'none',
-              cursor: call.chatId ? 'pointer' : 'default', textAlign: 'left',
+              padding: '10px 16px',
               fontFamily: "'Poppins',system-ui,sans-serif",
-              transition: 'background 0.15s',
             }}
-            onMouseEnter={(e) => { if (call.chatId) e.currentTarget.style.background = 'rgba(122,144,72,0.06)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
           >
             <UserAvatar userId={peerId} name={peerName} size={48} />
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{
-                fontSize: 14, fontWeight: 500, color: '#242d16', margin: 0,
+                fontSize: 14, fontWeight: 500, color: 'var(--color-text)', margin: 0,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {peerName}
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                {/* Outgoing arrow ↗ / Incoming arrow ↙ */}
                 <svg width="11" height="11" fill="none" stroke={arrowColor} strokeWidth="2"
                   strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 12 12">
                   {isCaller
@@ -124,16 +119,29 @@ export function CallHistoryList() {
                   {call.durationSeconds ? ` · ${formatDuration(call.durationSeconds)}` : ''}
                 </span>
               </div>
+              <span style={{ fontSize: 11, color: '#9aaa82' }}>{timeAgo(callTime)}</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: '#9aaa82' }}>{timeAgo(callTime)}</span>
-              {call.type === 'VIDEO'
-                ? <VideoIcon stroke="#9aaa82" />
-                : <PhoneIcon stroke="#9aaa82" />
-              }
-            </div>
-          </button>
+            <button
+              onClick={() => requestOutgoingCall({
+                peerId: peerId!,
+                peerName: peerName ?? '?',
+                type: call.type,
+                chatId: call.chatId ?? undefined,
+              })}
+              title={call.type === 'VIDEO' ? 'Videollamada' : 'Llamada de voz'}
+              style={{
+                background: 'rgba(122,144,72,0.12)', border: 'none', borderRadius: '50%',
+                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0, color: '#7a9048',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(122,144,72,0.22)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(122,144,72,0.12)' }}
+            >
+              {call.type === 'VIDEO' ? <VideoIcon stroke="#7a9048" /> : <PhoneIcon stroke="#7a9048" />}
+            </button>
+          </div>
         )
       })}
     </div>

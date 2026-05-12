@@ -22,6 +22,7 @@ export function CallManager() {
   const startIncoming = useCallStore((s) => s.startIncoming)
   const setType = useCallStore((s) => s.setType)
   const endCallInStore = useCallStore((s) => s.endCall)
+  const setMissedCallsCount = useCallStore((s) => s.setMissedCallsCount)
   const user = useAuthStore((s) => s.user)
 
   const webrtc = useWebRTC()
@@ -80,6 +81,10 @@ export function CallManager() {
               const ended = event as CallEndedEvent
               const currentCall = useCallStore.getState().call
               if (currentCall && currentCall.callId === ended.payload.callId) {
+                // If we were the callee and still ringing, this is a missed call
+                if (currentCall.phase === 'RINGING_IN' && ended.payload.reason === 'MISSED') {
+                  setMissedCallsCount(useCallStore.getState().missedCallsCount + 1)
+                }
                 rtc.onRemoteEnd()
               }
               break
@@ -97,7 +102,7 @@ export function CallManager() {
     return () => {
       sub?.unsubscribe()
     }
-  }, [user, startIncoming, setType])
+  }, [user, startIncoming, setType, setMissedCallsCount])
 
   if (!call) return null
 
