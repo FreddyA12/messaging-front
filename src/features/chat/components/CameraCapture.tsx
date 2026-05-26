@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import * as faceapi from 'face-api.js'
 import type { AttachType } from './AttachMenu'
 
 interface CameraCaptureProps {
@@ -10,6 +11,26 @@ interface CameraCaptureProps {
 type ColorFilter = 'none' | 'grayscale' | 'sepia' | 'vivid' | 'warm' | 'cool'
 type ArFilterId = 'dog' | 'glasses' | 'bunny'
 type SelectedFilter = { kind: 'color'; id: ColorFilter } | { kind: 'ar'; id: ArFilterId }
+
+// ─── Face API models loader ──────────────────────────────────────────────────
+let modelsLoaded = false
+
+async function loadFaceAPIModels(): Promise<void> {
+  if (modelsLoaded) return
+  try {
+    console.log('[FaceAPI] Loading models from CDN...')
+    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/'
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.load(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.load(MODEL_URL), // Required for .withFaceLandmarks()
+    ])
+    modelsLoaded = true
+    console.log('[FaceAPI] Models loaded successfully')
+  } catch (e) {
+    console.error('[FaceAPI] Failed to load models:', e)
+    modelsLoaded = false
+  }
+}
 
 const COLOR_FILTERS: { id: ColorFilter; label: string; css: string; bg: string }[] = [
   { id: 'none',      label: 'Normal',  css: 'none',                                          bg: '#e8e8e8' },
@@ -28,171 +49,252 @@ const AR_FILTERS: { id: ArFilterId; label: string; emoji: string }[] = [
 
 type Phase = 'preview' | 'recording' | 'photo-taken' | 'video-taken'
 
-// ─── Face detection (Chrome/Edge FaceDetector API) ───────────────────────────
+// ─── Face detection (face-api.js TinyFaceDetector) ──────────────────────────
 interface FaceBox { x: number; y: number; width: number; height: number }
+interface FaceLandmarks {
+  leftEye: [number, number]
+  rightEye: [number, number]
+  nose: [number, number]
+  mouth: [number, number]
+}
 
-async function detectFace(img: HTMLImageElement): Promise<FaceBox | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const FD = (window as any).FaceDetector
-  if (!FD) return null
+interface DetectedFace {
+  box: FaceBox
+  landmarks: FaceLandmarks
+}
+
+async function detectFace(source: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement): Promise<DetectedFace | null> {
+  if (!modelsLoaded) return null
   try {
-    const detector = new FD({ fastMode: true, maxDetectedFaces: 1 })
-    const faces = await detector.detect(img)
-    if (!faces.length) return null
-    const bb = faces[0].boundingBox
-    return { x: bb.x, y: bb.y, width: bb.width, height: bb.height }
-  } catch { return null }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const detections = await faceapi
+      .detectSingleFace(source as any, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+
+    if (!detections) return null
+
+    const box = detections.detection.box
+    const lm = detections.landmarks
+
+    // face-api returns Point objects { x, y } — NOT arrays — so centroid properly
+    const centroid = (pts: Array<{ x: number; y: number }>): [number, number] => [
+      pts.reduce((s, p) => s + p.x, 0) / pts.length,
+      pts.reduce((s, p) => s + p.y, 0) / pts.length,
+    ]
+
+    return {
+      box: { x: box.x, y: box.y, width: box.width, height: box.height },
+      landmarks: {
+        leftEye:  centroid(lm.getLeftEye()),
+        rightEye: centroid(lm.getRightEye()),
+        nose:     centroid(lm.getNose()),
+        mouth:    centroid(lm.getMouth()),
+      },
+    }
+  } catch (e) {
+    console.error('[FaceAPI] Error detecting face:', e)
+    return null
+  }
 }
 
 // Default face box when detector is unavailable
+// More realistic face position for typical webcam framing
 function defaultFace(w: number, h: number): FaceBox {
-  return { x: w * 0.2, y: h * 0.1, width: w * 0.6, height: h * 0.55 }
+  return {
+    x: w * 0.15,        // 15% from left
+    y: h * 0.2,         // 20% from top (lower than before, centered better)
+    width: w * 0.7,     // 70% width (wider face)
+    height: h * 0.6     // 60% height
+  }
 }
 
 // ─── AR drawing functions ────────────────────────────────────────────────────
-function drawDog(ctx: CanvasRenderingContext2D, w: number, h: number, face: FaceBox | null) {
-  const fb = face ?? defaultFace(w, h)
-  const fw = fb.width
-  const earW = fw * 0.21
-  const earH = fw * 0.38
+// All functions receive landmarks in plain canvas pixel coordinates (lx < rx).
+// face-api detects on the already-mirrored canvas, so "left eye" is screen-left.
 
-  // Left ear
-  ctx.save()
-  ctx.translate(fb.x + fw * 0.08, fb.y - earH * 0.25)
-  ctx.rotate(-0.38)
-  ctx.fillStyle = '#7B3F00'
-  ctx.beginPath(); ctx.ellipse(0, 0, earW, earH, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = '#C68642'
-  ctx.beginPath(); ctx.ellipse(0, earH * 0.1, earW * 0.55, earH * 0.72, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.restore()
+function drawDog(ctx: CanvasRenderingContext2D, landmarks: FaceLandmarks | null) {
+  if (!landmarks) return
 
-  // Right ear
-  ctx.save()
-  ctx.translate(fb.x + fw * 0.92, fb.y - earH * 0.25)
-  ctx.rotate(0.38)
-  ctx.fillStyle = '#7B3F00'
-  ctx.beginPath(); ctx.ellipse(0, 0, earW, earH, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = '#C68642'
-  ctx.beginPath(); ctx.ellipse(0, earH * 0.1, earW * 0.55, earH * 0.72, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.restore()
+  const [lx, ly] = landmarks.leftEye   // lx < rx — left eye on screen-left
+  const [rx, ry] = landmarks.rightEye
+  const [nx, ny] = landmarks.nose
+
+  if (!isFinite(lx) || !isFinite(ly) || !isFinite(rx) || !isFinite(ry) || !isFinite(nx) || !isFinite(ny)) return
+
+  const d = Math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
+  if (!isFinite(d) || d < 5) return
+
+  const earW = d * 0.45
+  const earH = d * 0.8
+  
+
+  // Left ear: to the LEFT of the left eye
+  ctx.fillStyle = '#8B6F47'
+  ctx.beginPath()
+  ctx.ellipse(lx - d * 0.35, ly - d * 0.45, earW, earH, -0.35, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#C8956C'
+  ctx.beginPath()
+  ctx.ellipse(lx - d * 0.35, ly - d * 0.45, earW * 0.55, earH * 0.65, -0.35, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Right ear: to the RIGHT of the right eye
+  ctx.fillStyle = '#8B6F47'
+  ctx.beginPath()
+  ctx.ellipse(rx + d * 0.35, ry - d * 0.45, earW, earH, 0.35, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#C8956C'
+  ctx.beginPath()
+  ctx.ellipse(rx + d * 0.35, ry - d * 0.45, earW * 0.55, earH * 0.65, 0.35, 0, Math.PI * 2)
+  ctx.fill()
 
   // Nose
-  const nx = fb.x + fw * 0.5, ny = fb.y + fb.height * 0.78
-  ctx.fillStyle = '#1a1a1a'
+  ctx.fillStyle = '#111'
   ctx.beginPath()
-  ctx.roundRect(nx - fw * 0.09, ny - fw * 0.06, fw * 0.18, fw * 0.115, fw * 0.05)
+  ctx.ellipse(nx, ny, d * 0.2, d * 0.14, 0, 0, Math.PI * 2)
   ctx.fill()
-  // Highlight on nose
-  ctx.fillStyle = 'rgba(255,255,255,0.4)'
-  ctx.beginPath(); ctx.ellipse(nx - fw * 0.03, ny - fw * 0.025, fw * 0.03, fw * 0.025, 0, 0, Math.PI * 2); ctx.fill()
-
-  // Cheek spots
-  ctx.fillStyle = 'rgba(139,90,43,0.28)'
-  ctx.beginPath(); ctx.ellipse(fb.x + fw * 0.22, fb.y + fb.height * 0.66, fw * 0.1, fw * 0.067, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.beginPath(); ctx.ellipse(fb.x + fw * 0.78, fb.y + fb.height * 0.66, fw * 0.1, fw * 0.067, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'
+  ctx.beginPath()
+  ctx.ellipse(nx - d * 0.06, ny - d * 0.04, d * 0.06, d * 0.04, 0, 0, Math.PI * 2)
+  ctx.fill()
 }
 
-function drawHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string) {
-  ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = color
+function drawGlasses(ctx: CanvasRenderingContext2D, landmarks: FaceLandmarks | null) {
+  if (!landmarks) return
+
+  const [lx, ly] = landmarks.leftEye   // lx < rx
+  const [rx, ry] = landmarks.rightEye
+
+  if (!isFinite(lx) || !isFinite(ly) || !isFinite(rx) || !isFinite(ry)) return
+
+  const d = Math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
+  if (!isFinite(d) || d < 5) return
+
+  // Oval lenses — slightly smaller than half the eye distance so they don't overlap
+  const rX = d * 0.52
+  const rY = d * 0.40
+  const lw = Math.max(d * 0.07, 3)
+
+  ctx.fillStyle = 'rgba(255, 20, 147, 0.25)'
+  ctx.beginPath(); ctx.ellipse(lx, ly, rX, rY, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.ellipse(rx, ry, rX, rY, 0, 0, Math.PI * 2); ctx.fill()
+
+  ctx.strokeStyle = '#FF1493'
+  ctx.lineWidth = lw
+  ctx.lineJoin = 'round'
+  ctx.beginPath(); ctx.ellipse(lx, ly, rX, rY, 0, 0, Math.PI * 2); ctx.stroke()
+  ctx.beginPath(); ctx.ellipse(rx, ry, rX, rY, 0, 0, Math.PI * 2); ctx.stroke()
+
+  // Bridge: right side of left lens → left side of right lens
+  const midY = (ly + ry) / 2
   ctx.beginPath()
-  ctx.moveTo(0, size * 0.35)
-  ctx.bezierCurveTo(-size * 1.2, -size * 0.75, -size * 2.4, size * 0.25, 0, size * 1.5)
-  ctx.bezierCurveTo(size * 2.4, size * 0.25, size * 1.2, -size * 0.75, 0, size * 0.35)
-  ctx.fill(); ctx.restore()
-}
-
-function drawGlasses(ctx: CanvasRenderingContext2D, w: number, h: number, face: FaceBox | null) {
-  const fb = face ?? defaultFace(w, h)
-  const fw = fb.width
-  const eyeY = fb.y + fb.height * 0.38
-  const r = fw * 0.175
-  const lx = fb.x + fw * 0.27, rx = fb.x + fw * 0.73
-  const lw = fw * 0.028
-
-  // Lens fill
-  ctx.fillStyle = 'rgba(255, 100, 180, 0.22)'
-  ctx.beginPath(); ctx.arc(lx, eyeY, r, 0, Math.PI * 2); ctx.fill()
-  ctx.beginPath(); ctx.arc(rx, eyeY, r, 0, Math.PI * 2); ctx.fill()
-
-  // Frames
-  ctx.strokeStyle = '#FF1493'; ctx.lineWidth = lw; ctx.lineJoin = 'round'
-  ctx.beginPath(); ctx.arc(lx, eyeY, r, 0, Math.PI * 2); ctx.stroke()
-  ctx.beginPath(); ctx.arc(rx, eyeY, r, 0, Math.PI * 2); ctx.stroke()
-
-  // Bridge
-  ctx.beginPath()
-  ctx.moveTo(lx + r, eyeY - r * 0.15)
-  ctx.quadraticCurveTo((lx + rx) / 2, eyeY - r * 0.5, rx - r, eyeY - r * 0.15)
+  ctx.moveTo(lx + rX, midY - rY * 0.1)
+  ctx.quadraticCurveTo((lx + rx) / 2, midY - rY * 0.4, rx - rX, midY - rY * 0.1)
   ctx.stroke()
 
-  // Temples
-  ctx.beginPath(); ctx.moveTo(lx - r, eyeY); ctx.lineTo(fb.x - fw * 0.05, eyeY - fw * 0.04); ctx.stroke()
-  ctx.beginPath(); ctx.moveTo(rx + r, eyeY); ctx.lineTo(fb.x + fw * 1.05, eyeY - fw * 0.04); ctx.stroke()
-
-  // Hearts inside lenses
-  drawHeart(ctx, lx, eyeY - r * 0.1, r * 0.3, 'rgba(255,100,180,0.7)')
-  drawHeart(ctx, rx, eyeY - r * 0.1, r * 0.3, 'rgba(255,100,180,0.7)')
-
-  // Star decorations
-  const starSize = r * 0.18
-  for (let i = 0; i < 3; i++) {
-    const angle = (i / 3) * Math.PI * 2
-    ctx.fillStyle = `rgba(255, 215, 0, ${0.5 + i * 0.15})`
-    ctx.beginPath()
-    ctx.arc(lx + Math.cos(angle) * r * 0.75, eyeY + Math.sin(angle) * r * 0.75, starSize, 0, Math.PI * 2)
-    ctx.fill()
-  }
+  // Left temple: from outer-left edge going further left
+  ctx.beginPath(); ctx.moveTo(lx - rX, ly); ctx.lineTo(lx - rX - d * 0.45, ly - d * 0.05); ctx.stroke()
+  // Right temple: from outer-right edge going further right
+  ctx.beginPath(); ctx.moveTo(rx + rX, ry); ctx.lineTo(rx + rX + d * 0.45, ry - d * 0.05); ctx.stroke()
 }
 
-function drawBunny(ctx: CanvasRenderingContext2D, w: number, h: number, face: FaceBox | null) {
-  const fb = face ?? defaultFace(w, h)
-  const fw = fb.width
-  const earW = fw * 0.115
-  const earH = fw * 0.58
-  const lx = fb.x + fw * 0.3, rx = fb.x + fw * 0.7
-  const earCY = fb.y - earH * 0.38
+function drawBunny(ctx: CanvasRenderingContext2D, landmarks: FaceLandmarks | null) {
+  if (!landmarks) return
 
-  // Left ear
-  ctx.save(); ctx.translate(lx, earCY); ctx.rotate(-0.12)
-  ctx.fillStyle = '#F0F0F0'
-  ctx.beginPath(); ctx.ellipse(0, 0, earW, earH, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = '#FFB6C1'
-  ctx.beginPath(); ctx.ellipse(0, earH * 0.05, earW * 0.45, earH * 0.78, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.restore()
+  const [lx, ly] = landmarks.leftEye   // lx < rx
+  const [rx, ry] = landmarks.rightEye
+  const [nx, ny] = landmarks.nose
 
-  // Right ear
-  ctx.save(); ctx.translate(rx, earCY); ctx.rotate(0.12)
-  ctx.fillStyle = '#F0F0F0'
-  ctx.beginPath(); ctx.ellipse(0, 0, earW, earH, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = '#FFB6C1'
-  ctx.beginPath(); ctx.ellipse(0, earH * 0.05, earW * 0.45, earH * 0.78, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.restore()
+  if (!isFinite(lx) || !isFinite(ly) || !isFinite(rx) || !isFinite(ry) || !isFinite(nx) || !isFinite(ny)) return
 
-  // Nose
-  const nx = fb.x + fw * 0.5, ny = fb.y + fb.height * 0.77
+  const d = Math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
+  if (!isFinite(d) || d < 5) return
+
+  const centerX = (lx + rx) / 2
+
+  // Ears above the forehead — earH determines how tall; center placed so bottom = top-of-head
+  const earW = d * 0.25
+  const earH = d * 0.75
+
+  // Ear center Y: place bottom of ear at approximately forehead level (ly - 0.9*d)
+  const earCY = ly - 0.9 * d - earH * 0.1   // center slightly above forehead
+
+  // Left ear: to the LEFT of face center
+  ctx.fillStyle = '#FFF0F5'
+  ctx.beginPath()
+  ctx.ellipse(centerX - d * 0.28, earCY, earW, earH, -0.08, 0, Math.PI * 2)
+  ctx.fill()
   ctx.fillStyle = '#FF9EB5'
   ctx.beginPath()
-  ctx.moveTo(nx, ny - fw * 0.048)
-  ctx.lineTo(nx - fw * 0.052, ny + fw * 0.03)
-  ctx.lineTo(nx + fw * 0.052, ny + fw * 0.03)
-  ctx.closePath(); ctx.fill()
+  ctx.ellipse(centerX - d * 0.28, earCY, earW * 0.45, earH * 0.78, -0.08, 0, Math.PI * 2)
+  ctx.fill()
 
-  // Cheek blush
-  ctx.fillStyle = 'rgba(255,182,193,0.38)'
-  ctx.beginPath(); ctx.ellipse(fb.x + fw * 0.2, ny - fw * 0.05, fw * 0.1, fw * 0.065, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.beginPath(); ctx.ellipse(fb.x + fw * 0.8, ny - fw * 0.05, fw * 0.1, fw * 0.065, 0, 0, Math.PI * 2); ctx.fill()
+  // Right ear: to the RIGHT of face center
+  ctx.fillStyle = '#FFF0F5'
+  ctx.beginPath()
+  ctx.ellipse(centerX + d * 0.28, earCY, earW, earH, 0.08, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#FF9EB5'
+  ctx.beginPath()
+  ctx.ellipse(centerX + d * 0.28, earCY, earW * 0.45, earH * 0.78, 0.08, 0, Math.PI * 2)
+  ctx.fill()
 
-  // Whisker dots
-  ctx.fillStyle = 'rgba(180, 100, 130, 0.6)'
-  const dotPositions = [
-    [0.18, 0.72], [0.23, 0.76], [0.18, 0.80],
-    [0.82, 0.72], [0.77, 0.76], [0.82, 0.80],
-  ]
-  for (const [px, py] of dotPositions) {
-    ctx.beginPath()
-    ctx.arc(fb.x + fw * px, fb.y + fb.height * py, fw * 0.018, 0, Math.PI * 2)
-    ctx.fill()
+  // Nose
+  ctx.fillStyle = '#FF69B4'
+  ctx.beginPath()
+  ctx.ellipse(nx, ny, d * 0.14, d * 0.10, 0, 0, Math.PI * 2)
+  ctx.fill()
+}
+
+// ─── Convert CSS filter string to canvas filter string ────────────────────
+function toCSSFilter(colorFilter: ColorFilter): string {
+  const filter = COLOR_FILTERS.find((f) => f.id === colorFilter)
+  return filter?.css ?? 'none'
+}
+
+// ─── Apply color filters manually via pixel manipulation ───────────────────
+function applyColorFilter(ctx: CanvasRenderingContext2D, w: number, h: number, color: ColorFilter): void {
+  if (color === 'none') return
+  
+  const imageData = ctx.getImageData(0, 0, w, h)
+  const data = imageData.data
+  
+  if (color === 'grayscale') {
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114
+      data[i] = gray
+      data[i+1] = gray
+      data[i+2] = gray
+    }
+  } else if (color === 'sepia') {
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i+1], b = data[i+2]
+      data[i] = Math.min(255, r * 0.393 + g * 0.769 + b * 0.189)
+      data[i+1] = Math.min(255, r * 0.349 + g * 0.686 + b * 0.168)
+      data[i+2] = Math.min(255, r * 0.272 + g * 0.534 + b * 0.131)
+    }
+  } else if (color === 'vivid') {
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i+1], b = data[i+2]
+      data[i] = Math.min(255, Math.max(0, (r - 128) * 1.8 + 128))
+      data[i+1] = Math.min(255, Math.max(0, (g - 128) * 1.8 + 128))
+      data[i+2] = Math.min(255, Math.max(0, (b - 128) * 1.8 + 128))
+    }
+  } else if (color === 'warm') {
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.min(255, data[i] * 1.1)
+      data[i+1] = Math.min(255, data[i+1] * 0.95)
+      data[i+2] = Math.min(255, data[i+2] * 0.8)
+    }
+  } else if (color === 'cool') {
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.min(255, data[i] * 0.8)
+      data[i+1] = Math.min(255, data[i+1] * 0.95)
+      data[i+2] = Math.min(255, data[i+2] * 1.2)
+    }
   }
+  
+  ctx.putImageData(imageData, 0, 0)
 }
 
 // ─── Apply filters to canvas and return Blob ─────────────────────────────────
@@ -200,19 +302,68 @@ async function buildFilteredBlob(
   src: HTMLCanvasElement,
   color: ColorFilter,
   ar: ArFilterId | null,
-  face: FaceBox | null,
+  detectedFace: DetectedFace | null,
 ): Promise<Blob> {
   const out = document.createElement('canvas')
   out.width = src.width; out.height = src.height
   const ctx = out.getContext('2d')!
-  const csf = COLOR_FILTERS.find((f) => f.id === color)?.css ?? 'none'
-  ctx.filter = csf
   ctx.drawImage(src, 0, 0)
-  ctx.filter = 'none'
-  if (ar === 'dog')     drawDog(ctx, out.width, out.height, face)
-  if (ar === 'glasses') drawGlasses(ctx, out.width, out.height, face)
-  if (ar === 'bunny')   drawBunny(ctx, out.width, out.height, face)
+  
+  // Apply color filter manually
+  applyColorFilter(ctx, out.width, out.height, color)
+  
+  // Draw AR effects using landmarks
+  if (ar && detectedFace) {
+    if (ar === 'dog')     drawDog(ctx, detectedFace.landmarks)
+    if (ar === 'glasses') drawGlasses(ctx, detectedFace.landmarks)
+    if (ar === 'bunny')   drawBunny(ctx, detectedFace.landmarks)
+  }
+  
   return new Promise((res) => out.toBlob((b) => res(b!), 'image/jpeg', 0.92))
+}
+
+// ─── Render live frame with filters to canvas ────────────────────────────────
+function renderFrameWithFilters(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  colorFilter: ColorFilter,
+  arFilter: ArFilterId | null,
+  detectedFace: DetectedFace | null,
+  facingMode: 'user' | 'environment' = 'user',
+): void {
+  if (!video.videoWidth || !video.videoHeight) return
+  
+  // Initialize canvas dimensions
+  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+  }
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+
+  // Step 1: draw the video frame (mirrored for front camera) then restore immediately
+  ctx.save()
+  if (facingMode === 'user') {
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+  }
+  ctx.filter = toCSSFilter(colorFilter)
+  ctx.drawImage(video, 0, 0)
+  ctx.filter = 'none'
+  ctx.restore()  // ← back to normal (un-mirrored) coordinates before drawing AR
+
+  // Step 2: draw AR on top in plain pixel coordinates
+  // face-api detects on the mirrored canvas → lx < rx (left eye is on screen-left)
+  if (arFilter && detectedFace) {
+    try {
+      const { landmarks } = detectedFace
+      if (arFilter === 'dog')     drawDog(ctx, landmarks)
+      if (arFilter === 'glasses') drawGlasses(ctx, landmarks)
+      if (arFilter === 'bunny')   drawBunny(ctx, landmarks)
+    } catch (err) {
+      console.error('[Render] Error drawing AR filter:', err)
+    }
+  }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -229,13 +380,28 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null) // Live preview canvas with filters
   const streamRef = useRef<MediaStream | null>(null)
   const mrRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const animFrameRef = useRef<number | null>(null) // Animation frame ID
   const originalCanvasRef = useRef<HTMLCanvasElement | null>(null) // unfiltered photo
-  const faceRef = useRef<FaceBox | null>(null)
+  const detectedFaceRef = useRef<DetectedFace | null>(null)  // Change: store full DetectedFace
+  const frameCountRef = useRef(0) // Counter for face detection sampling
+  const filterRef = useRef<SelectedFilter>({ kind: 'color', id: 'none' }) // Keep in sync with state
+  const facingModeRef = useRef<'user' | 'environment'>('user') // Keep in sync with state
   const captureTypeRef = useRef<AttachType>('IMAGE')
+
+  // ── Sync filter state to ref for animation loop ──────────────────────────────
+  useEffect(() => {
+    filterRef.current = filter
+  }, [filter])
+
+  // ── Sync facing mode to ref ──────────────────────────────────────────────────
+  useEffect(() => {
+    facingModeRef.current = facingMode
+  }, [facingMode])
 
   // ── Camera startup ──────────────────────────────────────────────────────────
   const startCamera = useCallback(async (facing: 'user' | 'environment') => {
@@ -276,10 +442,45 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
   }, [])
 
   useEffect(() => {
+    // Load face-api models on component mount
+    loadFaceAPIModels().catch((err) => {
+      console.error('[CameraCapture] Failed to load face-api models:', err)
+    })
+    
     startCamera(facingMode)
+    console.log('[CameraCapture] Starting animation loop')
+    
+    // Animation loop for live filtering
+    const animate = async () => {
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      if (!video || !canvas || !streamRef.current) {
+        animFrameRef.current = requestAnimationFrame(animate)
+        return
+      }
+      
+      // Render current frame with filters (using refs for current state)
+      const ar = filterRef.current.kind === 'ar' ? filterRef.current.id : null
+      const color = filterRef.current.kind === 'color' ? filterRef.current.id : 'none'
+      renderFrameWithFilters(video, canvas, color, ar, detectedFaceRef.current, facingModeRef.current)
+      
+      // Detect face every 6 frames to avoid blocking the render loop
+      if (frameCountRef.current % 6 === 0) {
+        detectFace(canvas).then((detectedFace) => {
+          if (detectedFace) detectedFaceRef.current = detectedFace
+        }).catch(() => {/* silenced */})
+      }
+      
+      frameCountRef.current++
+      animFrameRef.current = requestAnimationFrame(animate)
+    }
+    
+    animFrameRef.current = requestAnimationFrame(animate)
+    
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop())
       if (timerRef.current) clearInterval(timerRef.current)
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       if (videoUrl) URL.revokeObjectURL(videoUrl)
     }
@@ -291,7 +492,7 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
     if (phase !== 'photo-taken' || !originalCanvasRef.current) return
     setProcessing(true)
     const ar = filter.kind === 'ar' ? filter.id : null
-    buildFilteredBlob(originalCanvasRef.current, filter.kind === 'color' ? filter.id : 'none', ar, faceRef.current)
+    buildFilteredBlob(originalCanvasRef.current, filter.kind === 'color' ? filter.id : 'none', ar, detectedFaceRef.current)
       .then((blob) => {
         if (previewUrl) URL.revokeObjectURL(previewUrl)
         setPreviewUrl(URL.createObjectURL(blob))
@@ -302,37 +503,38 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
 
   // ── Photo capture ────────────────────────────────────────────────────────────
   const takePhoto = () => {
-    const video = videoRef.current
-    if (!video) return
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth || 640
-    canvas.height = video.videoHeight || 480
-    const ctx = canvas.getContext('2d')!
-    // Mirror if front camera
-    if (facingMode === 'user') {
-      ctx.translate(canvas.width, 0); ctx.scale(-1, 1)
-    }
-    ctx.drawImage(video, 0, 0)
-    originalCanvasRef.current = canvas
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    // Create a copy of the canvas with filters applied (for export)
+    const photoCanvas = document.createElement('canvas')
+    photoCanvas.width = canvas.width
+    photoCanvas.height = canvas.height
+    const ctx = photoCanvas.getContext('2d')!
+    
+    // Draw the filtered canvas
+    ctx.drawImage(canvas, 0, 0)
+    
+    originalCanvasRef.current = photoCanvas
     captureTypeRef.current = 'IMAGE'
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
 
     // Reset filter on new capture
     setFilter({ kind: 'color', id: 'none' })
-    faceRef.current = null
+    detectedFaceRef.current = null
     setProcessing(true)
     setPhase('photo-taken')
 
-    // Detect face and build initial preview (no filter)
-    canvas.toBlob(async (blob) => {
+    // Detect face and build initial preview
+    photoCanvas.toBlob(async (blob) => {
       if (!blob) { setProcessing(false); return }
       const img = new Image()
       const tmpUrl = URL.createObjectURL(blob)
       img.onload = async () => {
         URL.revokeObjectURL(tmpUrl)
-        faceRef.current = await detectFace(img)
-        const noFilterBlob = await buildFilteredBlob(canvas, 'none', null, faceRef.current)
+        detectedFaceRef.current = await detectFace(img)
+        const noFilterBlob = await buildFilteredBlob(photoCanvas, 'none', null, detectedFaceRef.current)
         setPreviewUrl(URL.createObjectURL(noFilterBlob))
         setProcessing(false)
       }
@@ -342,11 +544,21 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
 
   // ── Video recording ──────────────────────────────────────────────────────────
   const startRecording = () => {
-    if (!streamRef.current) return
+    if (!streamRef.current || !canvasRef.current) return
     chunksRef.current = []
+    
+    // Capture video from canvas (with filters) at 30 fps
+    const canvasStream = canvasRef.current.captureStream(30)
+    
+    // Add audio track from the original stream
+    const audioTracks = streamRef.current.getAudioTracks()
+    if (audioTracks.length > 0) {
+      canvasStream.addTrack(audioTracks[0])
+    }
+    
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
       ? 'video/webm;codecs=vp9,opus' : 'video/webm'
-    const mr = new MediaRecorder(streamRef.current, { mimeType: mime })
+    const mr = new MediaRecorder(canvasStream, { mimeType: mime })
     mrRef.current = mr
     mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
     mr.onstop = () => {
@@ -375,7 +587,7 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
     if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null) }
     if (videoUrl) { URL.revokeObjectURL(videoUrl); setVideoUrl(null) }
     originalCanvasRef.current = null
-    faceRef.current = null
+    detectedFaceRef.current = null
     setCaption('')
     setViewOnce(false)
     setFilter({ kind: 'color', id: 'none' })
@@ -397,7 +609,7 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
       if (phase === 'photo-taken' && originalCanvasRef.current) {
         const ar = filter.kind === 'ar' ? filter.id : null
         const colorId = filter.kind === 'color' ? filter.id : 'none'
-        const blob = await buildFilteredBlob(originalCanvasRef.current, colorId, ar, faceRef.current)
+        const blob = await buildFilteredBlob(originalCanvasRef.current, colorId, ar, detectedFaceRef.current)
         const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' })
         onSend(file, 'IMAGE', caption, viewOnce)
       } else if (phase === 'video-taken') {
@@ -474,15 +686,33 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
             </button>
           </div>
         ) : !isConfirmation ? (
-          // Live camera feed — no filter applied here
-          <video
-            ref={videoRef}
-            autoPlay muted playsInline
-            style={{
-              maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
-              transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
-            }}
-          />
+          // Live camera feed with filters on canvas
+          <>
+            <video
+              ref={videoRef}
+              autoPlay muted playsInline
+              style={{
+                position: 'absolute', width: 0, height: 0, visibility: 'hidden',
+              }}
+            />
+            <canvas
+              ref={canvasRef}
+              style={{
+                maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+            {/* Active filter indicator */}
+            {((filter.kind === 'ar' && filter.id !== null) || (filter.kind === 'color' && filter.id !== 'none')) && (
+              <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur rounded-full">
+                <span className="text-white text-xs font-medium">
+                  {filter.kind === 'ar'
+                    ? AR_FILTERS.find(f => f.id === filter.id)?.label ?? ''
+                    : COLOR_FILTERS.find(f => f.id === filter.id)?.label ?? ''}
+                </span>
+              </div>
+            )}
+          </>
         ) : phase === 'photo-taken' ? (
           <div className="relative w-full h-full flex items-center justify-center">
             {previewUrl && (
@@ -513,13 +743,12 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
         )}
       </div>
 
-      {/* ── Confirmation: filter strip + caption + send ──────────────────────── */}
-      {isConfirmation && (
-        <div className="shrink-0">
-          {/* Filter strip */}
-          <div className="flex items-center gap-0 px-3 py-2 overflow-x-auto">
+      {/* ── Filter controls (always visible except during errors) ──────────────── */}
+      {!error && (
+        <div className="shrink-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-4 pb-2">
+          <div className="flex items-center gap-0 px-3 overflow-x-auto">
             {/* AR filters */}
-            {phase === 'photo-taken' && AR_FILTERS.map((af) => {
+            {AR_FILTERS.map((af) => {
               const active = filter.kind === 'ar' && filter.id === af.id
               return (
                 <button
@@ -538,9 +767,7 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
             })}
 
             {/* Divider */}
-            {phase === 'photo-taken' && (
-              <div className="w-px h-10 bg-white/30 mx-2 shrink-0" />
-            )}
+            <div className="w-px h-10 bg-white/30 mx-2 shrink-0" />
 
             {/* Color filters */}
             {COLOR_FILTERS.map((cf) => {
@@ -563,7 +790,12 @@ export function CameraCapture({ onSend, onClose }: CameraCaptureProps) {
               )
             })}
           </div>
+        </div>
+      )}
 
+      {/* ── Confirmation: caption + send ──────────────────────────────────────── */}
+      {isConfirmation && (
+        <div className="shrink-0">
           {/* Caption input */}
           <div className="px-4 pb-2">
             <input
