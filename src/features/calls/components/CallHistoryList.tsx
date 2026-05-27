@@ -81,7 +81,7 @@ export function CallHistoryList() {
       {calls.map((call) => {
         const isCaller = call.callerId === currentUserId
         const peerId = isCaller ? call.calleeId : call.callerId
-        const peerName = isCaller ? call.calleeName : call.callerName
+        const peerName = isCaller ? (call.calleeName ?? 'Grupo') : call.callerName
         // Only the callee can have a missed call; outgoing unanswered calls are just "Saliente"
         const missed = !isCaller && (call.status === 'MISSED' || call.status === 'REJECTED')
         const callTime = call.endedAt ?? call.startedAt
