@@ -43,7 +43,7 @@ export function CallScreen({
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream
     }
-  }, [remoteStream])
+  }, [remoteStream, call.type])
 
   useEffect(() => {
     if (remoteAudioRef.current && remoteStream) {

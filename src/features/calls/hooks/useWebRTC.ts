@@ -66,6 +66,9 @@ export function useWebRTC(): UseWebRTCResult {
   const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null)
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([])
   const facingModeRef = useRef<'user' | 'environment'>('user')
+  // Accumulates remote tracks by ID so renegotiation (video escalation) always
+  // produces a new MediaStream reference and triggers React re-renders correctly.
+  const remoteTracksRef = useRef<Map<string, MediaStreamTrack>>(new Map())
 
   const stopLocalTracks = useCallback(() => {
     setLocalStream((stream) => {
@@ -79,6 +82,7 @@ export function useWebRTC(): UseWebRTCResult {
     pcRef.current = null
     pendingOfferRef.current = null
     pendingCandidatesRef.current = []
+    remoteTracksRef.current.clear()
     stopLocalTracks()
     setRemoteStream(null)
   }, [stopLocalTracks])
@@ -107,8 +111,9 @@ export function useWebRTC(): UseWebRTCResult {
         }
       }
 
-      pc.ontrack = ({ streams }) => {
-        setRemoteStream(streams[0] ?? null)
+      pc.ontrack = ({ track }) => {
+        remoteTracksRef.current.set(track.id, track)
+        setRemoteStream(new MediaStream([...remoteTracksRef.current.values()]))
       }
 
       pc.onconnectionstatechange = () => {
