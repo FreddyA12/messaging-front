@@ -8,12 +8,6 @@ import { StoryPrivacyDialog } from './StoryPrivacyDialog'
 import type { StoryUserGroupDTO } from '../../../types/story'
 import { UserAvatar } from '../../../components/UserAvatar'
 
-const AVATAR_COLORS = [
-  'bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-orange-500',
-  'bg-teal-500', 'bg-indigo-500', 'bg-red-500', 'bg-amber-500',
-]
-const avatarColor = (name: string) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
-
 export function StoriesBar() {
   const currentUser = useAuthStore((s) => s.user)
   const feedGroups = useStoryStore((s) => s.feedGroups)

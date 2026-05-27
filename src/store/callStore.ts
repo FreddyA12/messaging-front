@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CallType } from '../types/call'
+import type { CallType, CallEndReason } from '../types/call'
 
 export type CallPhase = 'IDLE' | 'RINGING_OUT' | 'RINGING_IN' | 'CONNECTING' | 'ACTIVE' | 'ENDED'
 
@@ -13,6 +13,7 @@ export interface ActiveCall {
   startedAt: number | null
   muted: boolean
   cameraOff: boolean
+  endReason?: CallEndReason
 }
 
 export interface PendingOutgoingCall {
@@ -44,6 +45,7 @@ interface CallState {
     peerName: string
   }) => void
   setPhase: (phase: CallPhase) => void
+  setEndReason: (reason: CallEndReason) => void
   setActive: () => void
   setType: (type: CallType) => void
   setMuted: (muted: boolean) => void
@@ -93,6 +95,9 @@ export const useCallStore = create<CallState>((set) => ({
 
   setPhase: (phase) =>
     set((s) => (s.call ? { call: { ...s.call, phase } } : s)),
+
+  setEndReason: (reason) =>
+    set((s) => (s.call ? { call: { ...s.call, endReason: reason } } : s)),
 
   setActive: () =>
     set((s) =>

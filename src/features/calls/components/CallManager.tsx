@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import type { StompSubscription } from '@stomp/stompjs'
 import { connectSocket, subscribe } from '../../../lib/socket'
 import { useWebRTC } from '../hooks/useWebRTC'
 import { useCallStore } from '../../../store/callStore'
@@ -20,6 +19,8 @@ export function CallManager() {
   const pendingStart = useCallStore((s) => s.pendingStart)
   const clearPendingStart = useCallStore((s) => s.clearPendingStart)
   const startIncoming = useCallStore((s) => s.startIncoming)
+  const setPhase = useCallStore((s) => s.setPhase)
+  const setEndReason = useCallStore((s) => s.setEndReason)
   const setType = useCallStore((s) => s.setType)
   const endCallInStore = useCallStore((s) => s.endCall)
   const setMissedCallsCount = useCallStore((s) => s.setMissedCallsCount)
@@ -43,7 +44,7 @@ export function CallManager() {
 
   useEffect(() => {
     if (!user) return
-    let sub: StompSubscription | null = null
+    let sub: { unsubscribe: () => void } | null = null
 
     connectSocket()
       .then(() => {
@@ -81,17 +82,23 @@ export function CallManager() {
               const ended = event as CallEndedEvent
               const currentCall = useCallStore.getState().call
               if (currentCall && currentCall.callId === ended.payload.callId) {
-                // If we were the callee and still ringing, this is a missed call
-                if (currentCall.phase === 'RINGING_IN' && ended.payload.reason === 'MISSED') {
-                  setMissedCallsCount(useCallStore.getState().missedCallsCount + 1)
+                if (ended.payload.reason === 'REJECTED') {
+                  setEndReason('REJECTED')
+                  setPhase('ENDED')
+                } else {
+                  if (currentCall.phase === 'RINGING_IN' && ended.payload.reason === 'MISSED') {
+                    setMissedCallsCount(useCallStore.getState().missedCallsCount + 1)
+                  }
+                  rtc.onRemoteEnd()
                 }
-                rtc.onRemoteEnd()
               }
               break
             }
             case 'CALL_ESCALATE': {
               const esc = event as CallEscalateEvent
-              if (esc.payload.enableVideo) setType('VIDEO')
+              if (esc.payload.enableVideo) {
+                rtc.onEscalate().catch((err) => console.warn('onEscalate failed', err))
+              }
               break
             }
           }
@@ -102,7 +109,16 @@ export function CallManager() {
     return () => {
       sub?.unsubscribe()
     }
-  }, [user, startIncoming, setType, setMissedCallsCount])
+  }, [user, startIncoming, setPhase, setEndReason, setType, setMissedCallsCount])
+
+  // Auto-close call screen when phase reaches ENDED (hang up from either side, rejection, connection lost)
+  useEffect(() => {
+    if (call?.phase !== 'ENDED') return
+    const timer = setTimeout(() => {
+      webrtcRef.current.endCall(false)
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [call?.phase])
 
   if (!call) return null
 

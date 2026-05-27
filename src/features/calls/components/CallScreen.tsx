@@ -83,6 +83,7 @@ export function CallScreen({
     call.phase === 'RINGING_OUT' ? 'Llamando...'
     : call.phase === 'CONNECTING' ? 'Conectando...'
     : call.phase === 'ACTIVE' ? formatElapsed(elapsed)
+    : call.phase === 'ENDED' && call.endReason === 'REJECTED' ? 'Llamada rechazada'
     : call.phase === 'ENDED' ? 'Llamada finalizada'
     : ''
 
