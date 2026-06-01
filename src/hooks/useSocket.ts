@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { connectSocket, disconnectSocket, subscribe, onSocketConnect, publish } from '../lib/socket'
 import { useChatStore, type Message } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
