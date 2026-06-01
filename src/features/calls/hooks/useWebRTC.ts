@@ -16,6 +16,12 @@ const ICE_SERVERS: RTCIceServer[] = [
 ]
 
 async function getUserMedia(audio: boolean, video: boolean): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error(
+      'Tu navegador bloquea el acceso a cámara/micrófono en conexiones HTTP. ' +
+      'Abre chrome://flags/#unsafely-treat-insecure-origin-as-secure, añade la URL de esta app y reinicia Chrome.'
+    )
+  }
   return navigator.mediaDevices.getUserMedia({
     audio,
     video: video
@@ -35,6 +41,7 @@ export interface UseWebRTCResult {
   toggleCamera: () => void
   switchCamera: () => Promise<void>
   escalateToVideo: () => Promise<void>
+  onEscalate: () => Promise<void>
   onOffer: (event: CallOfferEvent) => void
   onAnswer: (event: CallAnswerEvent) => Promise<void>
   onIceCandidate: (event: CallIceCandidateEvent) => Promise<void>
@@ -59,6 +66,9 @@ export function useWebRTC(): UseWebRTCResult {
   const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null)
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([])
   const facingModeRef = useRef<'user' | 'environment'>('user')
+  // Accumulates remote tracks by ID so renegotiation (video escalation) always
+  // produces a new MediaStream reference and triggers React re-renders correctly.
+  const remoteTracksRef = useRef<Map<string, MediaStreamTrack>>(new Map())
 
   const stopLocalTracks = useCallback(() => {
     setLocalStream((stream) => {
@@ -72,6 +82,7 @@ export function useWebRTC(): UseWebRTCResult {
     pcRef.current = null
     pendingOfferRef.current = null
     pendingCandidatesRef.current = []
+    remoteTracksRef.current.clear()
     stopLocalTracks()
     setRemoteStream(null)
   }, [stopLocalTracks])
@@ -100,8 +111,9 @@ export function useWebRTC(): UseWebRTCResult {
         }
       }
 
-      pc.ontrack = ({ streams }) => {
-        setRemoteStream(streams[0] ?? null)
+      pc.ontrack = ({ track }) => {
+        remoteTracksRef.current.set(track.id, track)
+        setRemoteStream(new MediaStream([...remoteTracksRef.current.values()]))
       }
 
       pc.onconnectionstatechange = () => {
@@ -275,6 +287,39 @@ export function useWebRTC(): UseWebRTCResult {
     }
   }, [localStream])
 
+  const onEscalate = useCallback(async () => {
+    const pc = pcRef.current
+    if (!pc || !call) return
+    try {
+      const videoStream = await getUserMedia(false, true)
+      const videoTrack = videoStream.getVideoTracks()[0]
+
+      if (videoTrack) {
+        pc.addTrack(videoTrack, localStream ?? videoStream)
+      }
+
+      const pendingOffer = pendingOfferRef.current
+      if (pendingOffer) {
+        await pc.setRemoteDescription(pendingOffer)
+        pendingOfferRef.current = null
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        await publish('/app/call.answer', { callId: call.callId, to: call.peerId, sdp: answer })
+        await drainPendingCandidates()
+      }
+
+      if (videoTrack) {
+        setLocalStream((prev) => {
+          if (prev) { prev.addTrack(videoTrack); return new MediaStream(prev.getTracks()) }
+          return new MediaStream([videoTrack])
+        })
+      }
+      setType('VIDEO')
+    } catch (err) {
+      console.warn('onEscalate failed', err)
+    }
+  }, [call, localStream, drainPendingCandidates, setType])
+
   const escalateToVideo = useCallback(async () => {
     if (!call || !pcRef.current || call.type === 'VIDEO') return
     try {
@@ -312,6 +357,7 @@ export function useWebRTC(): UseWebRTCResult {
     toggleCamera,
     switchCamera,
     escalateToVideo,
+    onEscalate,
     onOffer,
     onAnswer,
     onIceCandidate,

@@ -97,17 +97,6 @@ async function detectFace(source: HTMLCanvasElement | HTMLImageElement | HTMLVid
   }
 }
 
-// Default face box when detector is unavailable
-// More realistic face position for typical webcam framing
-function defaultFace(w: number, h: number): FaceBox {
-  return {
-    x: w * 0.15,        // 15% from left
-    y: h * 0.2,         // 20% from top (lower than before, centered better)
-    width: w * 0.7,     // 70% width (wider face)
-    height: h * 0.6     // 60% height
-  }
-}
-
 // ─── AR drawing functions ────────────────────────────────────────────────────
 // All functions receive landmarks in plain canvas pixel coordinates (lx < rx).
 // face-api detects on the already-mirrored canvas, so "left eye" is screen-left.
