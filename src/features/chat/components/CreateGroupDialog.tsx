@@ -4,6 +4,7 @@ import { chatApi } from '../api'
 import { api } from '../../../lib/axios'
 import type { AuthUser as UserDTO } from '../../../types/auth'
 import { useChatStore } from '../../../store/chatStore'
+import { encryptTransit } from '../../../lib/transitEncryption'
 
 interface Props {
   onClose: () => void
@@ -47,8 +48,8 @@ export function CreateGroupDialog({ onClose }: Props) {
     setError('')
     try {
       const chat = await chatApi.createGroup({
-        name: name.trim(),
-        description: description.trim() || undefined,
+        name: encryptTransit(name.trim()),
+        description: description.trim() ? encryptTransit(description.trim()) : undefined,
         memberIds: selected.map((u) => u.id),
       })
       await queryClient.invalidateQueries({ queryKey: ['chats'] })

@@ -4,6 +4,7 @@ import { storiesApi } from '../api'
 import { useStoryStore } from '../../../store/storyStore'
 import { api } from '../../../lib/axios'
 import { UserAvatar } from '../../../components/UserAvatar'
+import { decryptUserField } from '../../../lib/userEncryption'
 
 const STORY_DURATION_MS = 5000 // 5 s per story
 
@@ -61,7 +62,7 @@ function StoryMedia({ story }: { story: StoryDTO }) {
       style={{ background: story.backgroundColor ?? '#1a73e8' }}
     >
       <p className="text-white text-2xl font-semibold text-center leading-relaxed break-words">
-        {story.textContent}
+        {story.textContent ? decryptUserField(story.textContent, story.userId) : ''}
       </p>
     </div>
   )

@@ -15,6 +15,7 @@ import type {
   MessageReadEvent,
   MessagePinnedEvent,
   MessageDTO,
+  MentionReceivedEvent,
 } from '../types/chat'
 
 function decryptContent(content: string | null | undefined, senderId: number): string | null {
@@ -51,6 +52,7 @@ export function useSocket() {
     let presenceSub: ReturnType<typeof subscribe> | null = null
     let deliverySub: ReturnType<typeof subscribe> | null = null
     let chatEventsSub: ReturnType<typeof subscribe> | null = null
+    let mentionsSub: ReturnType<typeof subscribe> | null = null
 
     connectSocket()
       .then(() => {
@@ -87,6 +89,25 @@ export function useSocket() {
             queryClient.removeQueries({ queryKey: ['messages', event.payload.chatId] })
           }
         })
+
+        mentionsSub = subscribe('/user/queue/mentions', (body) => {
+          const event = body as MentionReceivedEvent
+          if (event.type !== 'MENTION_RECEIVED') return
+
+          if ('Notification' in window && Notification.permission === 'granted' && !document.hasFocus()) {
+            const notif = new Notification(`${event.payload.senderName} te mencionó`, {
+              body: `en ${event.payload.chatName}`,
+              icon: '/favicon.ico',
+              tag: `mention-${event.payload.messageId}`,
+              silent: false,
+            })
+            notif.onclick = () => {
+              window.focus()
+              useChatStore.getState().setActiveChat(event.payload.chatId)
+              notif.close()
+            }
+          }
+        })
       })
       .catch((err) => console.error('Socket connection failed:', err))
 
@@ -100,6 +121,7 @@ export function useSocket() {
       presenceSub?.unsubscribe()
       deliverySub?.unsubscribe()
       chatEventsSub?.unsubscribe()
+      mentionsSub?.unsubscribe()
       unregister()
       disconnectSocket()
     }
@@ -162,9 +184,25 @@ export function useChatSubscription(chatId: number | null) {
               if (chatId) setPinned(pinEvent.payload.messageId, chatId, pinEvent.payload.isPinned)
               break
             }
-            case 'POLL_UPDATED':
-              updateMessagePoll(event.payload.messageId, event.payload.poll)
+            case 'POLL_UPDATED': {
+              // The server builds the poll DTO from the voter's perspective, so
+              // votedByMe in the event reflects the voter's choices, not ours.
+              // Preserve our existing votedByMe values; only take updated counts.
+              const incoming = event.payload.poll
+              const allMsgs = Object.values(useChatStore.getState().messages).flat()
+              const existing = allMsgs.find((m) => m.id === event.payload.messageId)
+              const merged = existing?.poll
+                ? {
+                    ...incoming,
+                    options: incoming.options.map((o) => {
+                      const myOpt = existing.poll!.options.find((eo) => eo.id === o.id)
+                      return { ...o, votedByMe: myOpt?.votedByMe ?? false }
+                    }),
+                  }
+                : incoming
+              updateMessagePoll(event.payload.messageId, merged)
               break
+            }
           }
         })
 

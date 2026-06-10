@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { storiesApi } from '../api'
 import { useStoryStore } from '../../../store/storyStore'
+import { useAuthStore } from '../../../store/authStore'
+import { encryptUserField } from '../../../lib/userEncryption'
 
 const BG_COLORS = [
   '#1a73e8', '#0f9d58', '#e53935', '#f57c00',
@@ -13,6 +15,7 @@ interface Props {
 
 export function CreateStoryDialog({ onClose }: Props) {
   const addMyStory = useStoryStore((s) => s.addMyStory)
+  const currentUser = useAuthStore((s) => s.user)
   const [tab, setTab] = useState<'text' | 'media'>('text')
   const [text, setText] = useState('')
   const [bg, setBg] = useState(BG_COLORS[0])
@@ -38,7 +41,7 @@ export function CreateStoryDialog({ onClose }: Props) {
         form.append('file', file)
       }
       if (tab === 'text') {
-        form.append('textContent', text.trim())
+        form.append('textContent', currentUser?.id ? encryptUserField(text.trim(), currentUser.id) : text.trim())
         form.append('backgroundColor', bg)
       }
       const story = await storiesApi.createStory(form)

@@ -35,6 +35,7 @@ export function CallManager() {
   const user = useAuthStore((s) => s.user)
 
   const [pendingEscalation, setPendingEscalation] = useState<{ peerName: string } | null>(null)
+  const [mediaError, setMediaError] = useState<string | null>(null)
 
   const webrtc = useWebRTC()
   const groupWebRTC = useGroupWebRTC()
@@ -51,9 +52,12 @@ export function CallManager() {
     clearPendingStart()
     webrtcRef.current
       .startCall(peerId, peerName, type, chatId)
-      .catch((err) => {
+      .catch((err: Error) => {
         console.error('Failed to start call', err)
         endCallInStore()
+        if (err.name === 'NotAllowedError') {
+          setMediaError('Permite el acceso al micrófono' + (type === 'VIDEO' ? ' y la cámara' : '') + ' para poder llamar.')
+        }
       })
   }, [pendingStart, clearPendingStart, endCallInStore])
 
@@ -64,9 +68,12 @@ export function CallManager() {
     clearPendingGroupStart()
     groupWebRTCRef.current
       .startGroupCall(chatId, chatName, type)
-      .catch((err) => {
+      .catch((err: Error) => {
         console.error('Failed to start group call', err)
         endCallInStore()
+        if (err.name === 'NotAllowedError') {
+          setMediaError('Permite el acceso al micrófono' + (type === 'VIDEO' ? ' y la cámara' : '') + ' para poder llamar.')
+        }
       })
   }, [pendingGroupStart, clearPendingGroupStart, endCallInStore])
 
@@ -191,7 +198,20 @@ export function CallManager() {
     webrtcRef.current.onEscalate().catch((err) => console.warn('onEscalate failed', err))
   }
 
-  if (!call) return null
+  if (!call) {
+    if (!mediaError) return null
+    return (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] bg-red-600 text-white px-5 py-3 rounded-xl shadow-xl text-sm max-w-sm text-center">
+        {mediaError}
+        <button
+          onClick={() => setMediaError(null)}
+          className="ml-3 underline opacity-80 hover:opacity-100"
+        >
+          OK
+        </button>
+      </div>
+    )
+  }
 
   // ── Incoming 1:1 call ─────────────────────────────────────────────
   if (!call.isGroup && call.phase === 'RINGING_IN') {

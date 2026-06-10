@@ -158,12 +158,14 @@ export function useGroupWebRTC(): UseGroupWebRTCResult {
   const startGroupCall = useCallback<UseGroupWebRTCResult['startGroupCall']>(
     async (chatId, chatName, type) => {
       try {
-        const { callId } = await callApi.initiateGroup({ chatId, type })
-        startGroupOutgoing({ callId, type, chatId, chatName })
-
+        // Request media first — must happen before any async network call so the
+        // browser's user-activation context is still valid for getUserMedia.
         const stream = await getUserMedia(true, type === 'VIDEO')
         setLocalStream(stream)
         localStreamRef.current = stream
+
+        const { callId } = await callApi.initiateGroup({ chatId, type })
+        startGroupOutgoing({ callId, type, chatId, chatName })
 
         // No peer connections yet — they'll be created as participants join
       } catch (err) {

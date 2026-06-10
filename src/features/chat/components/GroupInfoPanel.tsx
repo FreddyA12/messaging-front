@@ -24,6 +24,11 @@ export function GroupInfoPanel({ chatId, chatName, description, onClose }: Props
   const [inviteLink, setInviteLink] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
 
+  const chats = useChatStore((s) => s.chats)
+  const setChats = useChatStore((s) => s.setChats)
+  const activeChat = chats.find((c) => c.id === chatId)
+  const [restricted, setRestricted] = useState(activeChat?.isRestricted ?? false)
+
   const { data: members = [], refetch: refetchMembers } = useQuery({
     queryKey: ['group-members', chatId],
     queryFn: () => chatApi.getGroupMembers(chatId),
@@ -31,6 +36,14 @@ export function GroupInfoPanel({ chatId, chatName, description, onClose }: Props
 
   const currentMember = members.find((m) => m.userId === currentUser?.id)
   const isAdmin = currentMember?.role === 'ADMIN'
+
+  const handleToggleRestricted = async () => {
+    try {
+      const updated = await chatApi.toggleRestricted(chatId)
+      setRestricted(updated.isRestricted ?? false)
+      setChats(chats.map((c) => c.id === chatId ? { ...c, isRestricted: updated.isRestricted } : c))
+    } catch { /* silent */ }
+  }
 
   const searchUsers = async (q: string) => {
     setSearchQuery(q)
@@ -124,6 +137,23 @@ export function GroupInfoPanel({ chatId, chatName, description, onClose }: Props
           </button>
         )}
       </div>
+
+      {/* Restricted mode — admins only */}
+      {isAdmin && (
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Solo administradores</p>
+            <p className="text-[11px] text-gray-400">Solo los admins pueden enviar mensajes</p>
+          </div>
+          <button
+            onClick={handleToggleRestricted}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${restricted ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+            style={{ background: restricted ? 'var(--color-primary,#7a9048)' : undefined }}
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${restricted ? 'translate-x-4' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 dark:border-gray-700">

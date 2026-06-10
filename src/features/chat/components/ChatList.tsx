@@ -64,6 +64,7 @@ export function ChatList() {
   const [showGroupDialog, setShowGroupDialog] = useState(false)
   const [ctx, setCtx] = useState<ContextMenuState | null>(null)
   const [confirm, setConfirm] = useState<ConfirmDialog | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const { chats, activeChatId, setChats, setActiveChat, setChatArchived, setChatPinned, removeChat, markChatUnread } = useChatStore()
@@ -177,6 +178,10 @@ export function ChatList() {
       if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1
       return (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '')
     })
+
+  const archivedChats = chats
+    .filter((c) => !!c.isArchived && (c.name ?? '').toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? ''))
 
   const renderChatItem = (chat: ChatListItem) => (
     <button
@@ -303,13 +308,38 @@ export function ChatList() {
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {isLoading
             ? Array.from({ length: 7 }).map((_, i) => <ChatItemSkeleton key={i} />)
-            : visibleChats.length === 0
+            : visibleChats.length === 0 && archivedChats.length === 0
               ? (
                 <p className="text-center text-sm text-gray-400 dark:text-gray-500 mt-10 px-4">
                   {search ? 'Sin resultados' : 'Aún no tienes chats'}
                 </p>
               )
-              : visibleChats.map(renderChatItem)
+              : (
+                <>
+                  {visibleChats.map(renderChatItem)}
+                  {archivedChats.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => setShowArchived((v) => !v)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors border-t border-gray-100 dark:border-gray-700/50"
+                      >
+                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                            d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8m-9 4h4" />
+                        </svg>
+                        <span className="flex-1 text-left">Archivados ({archivedChats.length})</span>
+                        <svg
+                          className={`w-3.5 h-3.5 transition-transform ${showArchived ? 'rotate-180' : ''}`}
+                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showArchived && archivedChats.map(renderChatItem)}
+                    </>
+                  )}
+                </>
+              )
           }
         </div>
       </div>

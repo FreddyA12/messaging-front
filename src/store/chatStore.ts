@@ -12,6 +12,7 @@ export interface ChatListItem {
   otherUserId?: number
   isArchived?: boolean
   isPinned?: boolean
+  isRestricted?: boolean
 }
 
 export interface Message {
@@ -135,6 +136,7 @@ export const useChatStore = create<ChatState>((set) => ({
       if (!existing || existing.length === 0) {
         return { messages: { ...s.messages, [chatId]: incoming } }
       }
+      const incomingIds = new Set(incoming.map((m) => m.id))
       const prevById = new Map(existing.map((m) => [m.id, m]))
       const merged = incoming.map((m) => {
         const prev = prevById.get(m.id)
@@ -151,7 +153,16 @@ export const useChatStore = create<ChatState>((set) => ({
           ? m
           : { ...m, readBy, deliveredTo }
       })
-      return { messages: { ...s.messages, [chatId]: merged } }
+      // Preserve messages in the store that the API didn't return:
+      // WS-added messages that raced with an in-flight API request, or
+      // scroll-loaded older messages outside the current page window.
+      const extraMsgs = existing.filter((m) => !incomingIds.has(m.id))
+      if (extraMsgs.length === 0) {
+        return { messages: { ...s.messages, [chatId]: merged } }
+      }
+      const combined = [...merged, ...extraMsgs]
+      combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      return { messages: { ...s.messages, [chatId]: combined } }
     }),
   addMessage: (message) =>
     set((s) => {

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useChatStore } from '../../../store/chatStore'
 import type { Message } from '../../../store/chatStore'
 import { useAppearanceStore, CHAT_BACKGROUNDS } from '../../../store/appearanceStore'
 import { useAuthStore } from '../../../store/authStore'
 import { useChatSubscription, publishTypingStart, publishTypingStop } from '../../../hooks/useSocket'
-import { publish } from '../../../lib/socket'
+import { publish, isSocketConnected } from '../../../lib/socket'
 import { chatApi } from '../api'
 import { mediaApi } from '../../media/api'
 import { compressImage } from '../../../utils/imageCompression'
@@ -27,8 +27,31 @@ import { useEncryptionStore } from '../../../store/encryptionStore'
 import { encrypt } from '../../../lib/afin'
 import type { CallType } from '../../../types/call'
 import { UserAvatar } from '../../../components/UserAvatar'
+import { blockApi } from '../../settings/api'
 
 const TYPING_STOP_DELAY = 3000
+
+function formatDateSeparator(date: Date): string {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today.getTime() - 86_400_000)
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  if (d.getTime() === today.getTime()) return 'Hoy'
+  if (d.getTime() === yesterday.getTime()) return 'Ayer'
+  return date.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function DateSeparator({ date }: { date: Date }) {
+  return (
+    <div className="flex items-center gap-3 py-2 px-2">
+      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+      <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
+        {formatDateSeparator(date)}
+      </span>
+      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+    </div>
+  )
+}
 
 function formatLastSeen(iso: string): string {
   const date = new Date(iso)
@@ -75,6 +98,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
   const setStarredMessages = useChatStore((s) => s.setStarredMessages)
   const toggleStarred = useChatStore((s) => s.toggleStarred)
   const currentUser = useAuthStore((s) => s.user)
+  const setPresence = useChatStore((s) => s.setPresence)
   const requestOutgoingCall = useCallStore((s) => s.requestOutgoingCall)
   const requestGroupOutgoingCall = useCallStore((s) => s.requestGroupOutgoingCall)
   const activeCall = useCallStore((s) => s.call)
@@ -99,7 +123,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
   const [showChatMenu, setShowChatMenu] = useState(false)
   const [mutedUntil, setMutedUntil] = useState<Date | null>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [groupMembers, setGroupMembers] = useState<{ userId: number; name: string }[]>([])
+  const [mentionedIds, setMentionedIds] = useState<number[]>([])
   const [newMessageTtl, setNewMessageTtl] = useState<number | null>(null)
   const [showTtlMenu, setShowTtlMenu] = useState(false)
   const [pendingAttach, setPendingAttach] = useState<{
@@ -109,9 +133,11 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
   } | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [viewOnce, setViewOnce] = useState(false)
+  const [offlineWarning, setOfflineWarning] = useState(false)
   const [showAudioRecorder, setShowAudioRecorder] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const [showPollDialog, setShowPollDialog] = useState(false)
+  const [showReportDialog, setShowReportDialog] = useState(false)
   const chatBg = useAppearanceStore((s) => s.chatBackground)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -130,6 +156,16 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     : []
   const otherPresence = activeChat?.otherUserId != null ? presence[activeChat.otherUserId] : null
   const activePinned = activeChatId ? (pinnedMessages[activeChatId] ?? []) : []
+
+  // Check current user's admin status in group chats (shared cache with GroupInfoPanel)
+  const { data: groupMembers } = useQuery({
+    queryKey: ['group-members', activeChatId],
+    queryFn: () => chatApi.getGroupMembers(activeChatId!),
+    enabled: !!activeChatId && activeChat?.type === 'GROUP',
+    staleTime: 30_000,
+  })
+  const isGroupAdmin = groupMembers?.some((m) => m.userId === currentUser?.id && m.role === 'ADMIN') ?? false
+  const isRestrictedForMe = activeChat?.type === 'GROUP' && (activeChat?.isRestricted ?? false) && !isGroupAdmin
 
   useChatSubscription(activeChatId)
 
@@ -158,6 +194,17 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
       .catch(() => { })
   }, [activeChatId, setPinnedMessages])
 
+  // Fetch initial presence for the other user in a private chat.
+  // WS events only arrive for future connect/disconnect, so without this
+  // an offline user would show "en línea" until they trigger an event.
+  const otherUserId = activeChat?.otherUserId
+  useEffect(() => {
+    if (!otherUserId) return
+    chatApi.getUserById(otherUserId)
+      .then((u) => setPresence(u.id, u.isOnline, u.lastSeen ?? undefined))
+      .catch(() => {})
+  }, [otherUserId, setPresence])
+
   useEffect(() => {
     if (activeChatId) {
       setInput('')
@@ -175,6 +222,8 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
       setShowAudioRecorder(false)
       setShowCamera(false)
       setShowPollDialog(false)
+      setMentionQuery(null)
+      setMentionedIds([])
       cancelAttach()
       inputRef.current?.focus()
     }
@@ -313,6 +362,11 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     const content = input.trim()
     if (!content && !pendingAttach) return
     if (!activeChatId) return
+    if (!isSocketConnected()) {
+      setOfflineWarning(true)
+      setTimeout(() => setOfflineWarning(false), 3000)
+      return
+    }
 
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
     stopTyping()
@@ -349,9 +403,12 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         attachmentIds,
         ttlSeconds: newMessageTtl ?? undefined,
         viewOnce: attachmentIds && viewOnce ? true : undefined,
+        mentionedUserIds: mentionedIds.length > 0 ? mentionedIds : undefined,
       })
       setViewOnce(false)
       setReplyTo(null)
+      setMentionedIds([])
+      setMentionQuery(null)
     }
 
     setInput('')
@@ -571,23 +628,13 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
     URL.revokeObjectURL(url)
   }
 
-  // Load group members for @mention autocomplete
-  useEffect(() => {
-    if (activeChat?.type === 'GROUP' && activeChatId) {
-      chatApi.getGroupMembers(activeChatId)
-        .then((members) => setGroupMembers(members.map((m) => ({ userId: m.userId, name: m.name }))))
-        .catch(() => {})
-    } else {
-      setGroupMembers([])
-    }
-  }, [activeChatId, activeChat?.type])
-
-  const handleMentionSelect = (name: string) => {
+  const handleMentionSelect = (userId: number, name: string) => {
     const at = input.lastIndexOf('@')
     if (at === -1) return
     const newInput = input.slice(0, at) + '@' + name + ' '
     setInput(newInput)
     setMentionQuery(null)
+    setMentionedIds((prev) => prev.includes(userId) ? prev : [...prev, userId])
     inputRef.current?.focus()
   }
 
@@ -695,7 +742,9 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                     ? 'en línea'
                     : otherPresence?.lastSeen
                       ? `visto ${formatLastSeen(otherPresence.lastSeen)}`
-                      : 'en línea'}
+                      : otherPresence
+                        ? 'sin conexión'
+                        : ''}
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
@@ -852,6 +901,28 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                     >
                       Exportar historial
                     </button>
+                    {activeChat.type === 'PRIVATE' && activeChat.otherUserId != null && (
+                      <>
+                        <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                        <button
+                          onClick={() => {
+                            setShowChatMenu(false)
+                            if (confirm('¿Bloquear a este usuario?')) {
+                              blockApi.block(activeChat.otherUserId!).catch(() => {})
+                            }
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                        >
+                          Bloquear usuario
+                        </button>
+                        <button
+                          onClick={() => { setShowChatMenu(false); setShowReportDialog(true) }}
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          Reportar usuario
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -951,25 +1022,39 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                     Aún no hay mensajes. ¡Di hola!
                   </p>
                 ) : (
-                  chatMessages.map((msg) => (
-                    <MessageBubble
-                      key={msg.id}
-                      message={msg}
-                      currentUserId={currentUser?.id ?? -1}
-                      chatType={activeChat.type}
-                      onReply={setReplyTo}
-                      onEdit={setEditingMessage}
-                      onDelete={setDeleteTarget}
-                      onReact={handleReact}
-                      onPin={handlePin}
-                      onStar={handleStar}
-                      onForward={setForwardingMessage}
-                      onSetTtl={setTtlMessage}
-                      onScrollToReply={scrollToMessage}
-                      setRef={setMessageRef}
-                      isHighlighted={highlightedMessageId === msg.id}
-                    />
-                  ))
+                  chatMessages.flatMap((msg, i) => {
+                    const nodes: React.ReactNode[] = []
+                    const prev = chatMessages[i - 1]
+                    const msgDate = new Date(msg.createdAt)
+                    const prevDate = prev ? new Date(prev.createdAt) : null
+                    const sameDay = prevDate &&
+                      prevDate.getFullYear() === msgDate.getFullYear() &&
+                      prevDate.getMonth() === msgDate.getMonth() &&
+                      prevDate.getDate() === msgDate.getDate()
+                    if (!sameDay) {
+                      nodes.push(<DateSeparator key={`sep-${msg.id}`} date={msgDate} />)
+                    }
+                    nodes.push(
+                      <MessageBubble
+                        key={msg.id}
+                        message={msg}
+                        currentUserId={currentUser?.id ?? -1}
+                        chatType={activeChat.type}
+                        onReply={setReplyTo}
+                        onEdit={setEditingMessage}
+                        onDelete={setDeleteTarget}
+                        onReact={handleReact}
+                        onPin={handlePin}
+                        onStar={handleStar}
+                        onForward={setForwardingMessage}
+                        onSetTtl={setTtlMessage}
+                        onScrollToReply={scrollToMessage}
+                        setRef={setMessageRef}
+                        isHighlighted={highlightedMessageId === msg.id}
+                      />
+                    )
+                    return nodes
+                  })
                 )}
               </>
             )}
@@ -1000,6 +1085,16 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
           </div>
         )}
 
+        {/* Offline warning */}
+        {offlineWarning && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border-t border-red-200 dark:border-red-800">
+            <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
+            </svg>
+            <p className="text-xs text-red-600 dark:text-red-400">Sin conexión — reconectando...</p>
+          </div>
+        )}
+
         {/* Reply preview */}
         {replyTo && !editingMessage && (
           <ReplyPreview message={replyTo} onCancel={() => setReplyTo(null)} />
@@ -1021,7 +1116,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
         {/* @mention autocomplete */}
         {mentionQuery !== null && activeChat?.type === 'GROUP' && (
           (() => {
-            const filtered = groupMembers.filter(
+            const filtered = (groupMembers ?? []).filter(
               (m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase()) && m.userId !== currentUser?.id
             )
             if (filtered.length === 0) return null
@@ -1030,7 +1125,7 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
                 {filtered.map((m) => (
                   <button
                     key={m.userId}
-                    onMouseDown={(e) => { e.preventDefault(); handleMentionSelect(m.name) }}
+                    onMouseDown={(e) => { e.preventDefault(); handleMentionSelect(m.userId, m.name) }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
                     <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 text-xs font-bold flex items-center justify-center shrink-0">
@@ -1052,8 +1147,25 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
           />
         )}
 
+        {/* Restricted mode notice */}
+        {!showSearch && isRestrictedForMe && (
+          <div style={{
+            padding: '14px 16px', borderTop: '1px solid var(--border-subtle)',
+            background: 'var(--bg-sidebar)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', gap: 8,
+          }}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0, opacity: 0.5 }}>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontFamily: "'Poppins',system-ui,sans-serif" }}>
+              Solo los administradores pueden enviar mensajes
+            </span>
+          </div>
+        )}
+
         {/* Input bar */}
-        {!showSearch && !showAudioRecorder && (
+        {!showSearch && !showAudioRecorder && !isRestrictedForMe && (
           <div style={{
             padding: '10px 16px 12px', borderTop: '1px solid var(--border-subtle)',
             display: 'flex', alignItems: 'flex-end', gap: '6px', flexShrink: 0,
@@ -1321,6 +1433,96 @@ export function ChatWindow({ onBack }: ChatWindowProps) {
           onClose={() => setShowCamera(false)}
         />
       )}
+
+      {/* Report dialog */}
+      {showReportDialog && activeChat?.otherUserId != null && (
+        <ReportUserDialog
+          userId={activeChat.otherUserId}
+          userName={activeChat.name}
+          onClose={() => setShowReportDialog(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ── Report dialog ─────────────────────────────────────── */
+const REPORT_REASONS = [
+  { value: 'SPAM', label: 'Spam' },
+  { value: 'INAPPROPRIATE', label: 'Contenido inapropiado' },
+  { value: 'HARASSMENT', label: 'Acoso o intimidación' },
+  { value: 'FAKE', label: 'Cuenta falsa' },
+  { value: 'OTHER', label: 'Otro' },
+]
+
+function ReportUserDialog({ userId, userName, onClose }: { userId: number; userName: string; onClose: () => void }) {
+  const [reason, setReason] = React.useState('')
+  const [description, setDescription] = React.useState('')
+  const [sending, setSending] = React.useState(false)
+  const [sent, setSent] = React.useState(false)
+
+  const handleSubmit = async () => {
+    if (!reason) return
+    setSending(true)
+    try {
+      await blockApi.report(userId, reason, description || undefined)
+      setSent(true)
+      setTimeout(onClose, 1500)
+    } catch { /* silent */ } finally { setSending(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">Reportar a {userName}</h2>
+        <p className="text-xs text-gray-400 mb-4">Tu reporte es anónimo</p>
+
+        {sent ? (
+          <p className="text-sm text-green-600 text-center py-4">Reporte enviado. Gracias.</p>
+        ) : (
+          <>
+            <div className="flex flex-col gap-2 mb-4">
+              {REPORT_REASONS.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => setReason(r.value)}
+                  className={`text-left px-4 py-2.5 rounded-xl border text-sm transition-colors ${reason === r.value ? 'border-primary bg-primary/10 text-gray-900 dark:text-gray-100 font-medium' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  style={{ borderColor: reason === r.value ? 'var(--color-primary,#7a9048)' : undefined }}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Descripción opcional..."
+              rows={2}
+              maxLength={500}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none dark:bg-gray-800 dark:text-gray-100 resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!reason || sending}
+                className="px-4 py-2 text-sm rounded-xl text-white disabled:opacity-50"
+                style={{ background: 'var(--color-primary,#7a9048)' }}
+              >
+                {sending ? 'Enviando…' : 'Enviar reporte'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

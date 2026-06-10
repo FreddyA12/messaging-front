@@ -217,6 +217,17 @@ export function MessageBubble({
     )
   }
 
+  // Render generic system event messages (group join/leave/add/remove)
+  if (message.type === 'SYSTEM') {
+    return (
+      <div ref={wrapperRef} className="flex justify-center my-1">
+        <span className="text-[11px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800/60 px-3 py-0.5 rounded-full">
+          {message.content}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={wrapperRef}
@@ -279,8 +290,10 @@ export function MessageBubble({
               <p className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 truncate">
                 {message.replyTo.senderName}
               </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                {message.replyTo.content ?? 'Archivo adjunto'}
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate italic">
+                {message.replyTo.deletedForEveryone
+                  ? 'Mensaje eliminado'
+                  : (message.replyTo.content ?? 'Archivo adjunto')}
               </p>
             </div>
           )}

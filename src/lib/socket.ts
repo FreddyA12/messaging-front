@@ -97,6 +97,10 @@ export function disconnectSocket(): void {
   registry.length = 0
 }
 
+export function isSocketConnected(): boolean {
+  return stompClient?.connected === true
+}
+
 // Returns an object with unsubscribe() — always non-null.
 export function subscribe(destination: string, callback: MsgCallback): { unsubscribe: () => void } {
   const entry: SubEntry = { destination, callback, stomp: null }
