@@ -340,3 +340,19 @@ Problemas detectados y resueltos tras la implementación inicial:
 - [x] Nueva disposición: `[📎 adjuntar] [📷 cámara] [textarea flex-1] [⏱ TTL] [🎤 mic → ✉️ send]`
 - [x] El botón derecho cambia dinámicamente: micrófono cuando no hay texto/adjunto; enviar cuando hay contenido o está editando
 - [x] El menú TTL ahora se abre hacia arriba-derecha en lugar de arriba-izquierda
+
+---
+
+## FIXES & FEATURES ADICIONALES (post-fase 13)
+
+- [x] **Fix presencia online**: `ChatWindow` hace `GET /api/users/{otherUserId}` al abrir un chat privado para cargar el estado real (isOnline/lastSeen) — evita mostrar "en línea" cuando el usuario está offline
+- [x] **useNotifications mejorado**: agrupa notificaciones por chat con `tag: chat-{chatId}`; lee `msgs[0]` (más reciente); deep link onclick (`setActiveChat`); muestra unreadCount en título; omite mensajes SYSTEM; cuerpo incluye `senderName:` en grupos
+- [x] **Contactos bloqueados en SettingsPage**: sección colapsable que carga `GET /api/users/blocked`, muestra lista con botón "Desbloquear" por usuario; `blockApi` en `settings/api.ts`
+- [x] **Modo restringido en GroupInfoPanel**: toggle visible solo para admins → llama `PATCH /api/chats/{id}/restrict`; actualiza el store al confirmar
+- [x] **Banner modo restringido en ChatWindow**: si el usuario no es admin y el grupo está restringido, reemplaza el input con un aviso "Solo los administradores pueden enviar mensajes"
+- [x] **Render mensajes SYSTEM**: `MessageBubble` renderiza tipo `SYSTEM` como píldora centrada gris (texto plano del servidor)
+- [x] **Diálogo de reporte**: botón "Reportar usuario" en el menú `...` de chats privados; `ReportUserDialog` con 5 razones predefinidas + descripción opcional; llama `POST /api/users/{id}/report`
+- [x] **@menciones en ChatWindow**: autocomplete desplegable al escribir `@` en grupos (filtra miembros); `handleMentionSelect(userId, name)` inserta nombre y acumula `mentionedIds`; se envía `mentionedUserIds` en el payload STOMP; `useSocket` suscribe a `/user/queue/mentions` y muestra notificación especial del navegador al ser mencionado; `setMentionQuery(null)` al enviar para cerrar el autocomplete
+- [x] **Fix: encuestas muestran voto ajeno (POLL_UPDATED)**: el evento WS lleva `votedByMe` desde la perspectiva del votante; al recibirlo, se preserva el `votedByMe` existente en el store (solo se actualizan los conteos); así cada usuario ve su propio estado de voto, no el del votante
+- [x] **Fix: mensajes desaparecen (race condition)**: `setMessages` en `chatStore.ts` preserva mensajes del store que no vienen en la respuesta API (mensajes WS en race condition con refetch, o mensajes cargados por scroll fuera de la página actual); combina y reordena por `createdAt` desc
+- [x] **Chats archivados accesibles**: sección colapsable "Archivados (N)" al fondo de `ChatList`; el usuario puede expandirla para ver y abrir chats archivados y leer sus mensajes

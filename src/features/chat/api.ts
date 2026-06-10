@@ -154,8 +154,14 @@ export const chatApi = {
   leaveGroup: (chatId: number) =>
     api.delete(`/api/chats/${chatId}`),
 
+  toggleRestricted: (chatId: number) =>
+    api.patch<import('../../../types/chat').ChatDTO>(`/api/chats/${chatId}/restrict`).then((r) => r.data),
+
   exportChat: (chatId: number) =>
     api.get(`/api/chats/${chatId}/export`, { responseType: 'blob' }).then((r) => r.data as Blob),
+
+  getUserById: (id: number) =>
+    api.get<{ id: number; isOnline: boolean; lastSeen: string | null }>(`/api/users/${id}`).then((r) => r.data),
 }
 
 export const pollsApi = {

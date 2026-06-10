@@ -60,6 +60,9 @@ export interface ChatDTO {
   otherUserId?: number
   inviteCode?: string | null
   members?: GroupMemberDTO[] | null
+  isArchived?: boolean
+  isPinned?: boolean
+  isRestricted?: boolean
 }
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'SYSTEM' | 'POLL'
@@ -118,6 +121,7 @@ export interface SendMessageRequest {
   attachmentIds?: number[]
   ttlSeconds?: number
   viewOnce?: boolean
+  mentionedUserIds?: number[]
 }
 
 export interface MessageNewEvent {
@@ -185,6 +189,17 @@ export interface PollUpdatedEvent {
   payload: { messageId: number; poll: PollDTO }
 }
 
+export interface MentionReceivedEvent {
+  type: 'MENTION_RECEIVED'
+  payload: {
+    messageId: number
+    chatId: number
+    chatName: string
+    senderId: number
+    senderName: string
+  }
+}
+
 export type ChatSocketEvent =
   | MessageNewEvent
   | MessageEditedEvent
@@ -199,3 +214,4 @@ export type ChatSocketEvent =
   | MessageReadEvent
   | MessagePinnedEvent
   | PollUpdatedEvent
+  | MentionReceivedEvent

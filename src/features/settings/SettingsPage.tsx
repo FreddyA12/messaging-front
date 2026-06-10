@@ -7,7 +7,7 @@ import {
   useAppearanceStore, PALETTES, CHAT_BACKGROUNDS, PATTERN_BACKGROUNDS,
   type ThemeMode, type ChatBg, type Palette, type FontSize,
 } from '../../store/appearanceStore'
-import { settingsApi, userApi } from './api'
+import { settingsApi, userApi, blockApi, type BlockedUserDTO } from './api'
 import { encryptUserField, decryptUserField } from '../../lib/userEncryption'
 
 type Section = 'profile' | 'chats' | 'notifications' | 'account'
@@ -479,10 +479,31 @@ type PrivacyLevel = 'EVERYONE' | 'CONTACTS' | 'NOBODY'
 function AccountSection() {
   const c = useThemeColors()
   const [showPrivacy, setShowPrivacy]     = useState(false)
+  const [showBlocked, setShowBlocked]     = useState(false)
+  const [blockedUsers, setBlockedUsers]   = useState<BlockedUserDTO[]>([])
+  const [loadingBlocked, setLoadingBlocked] = useState(false)
   const [lastSeen, setLastSeen]           = useState<PrivacyLevel>('EVERYONE')
   const [profilePic, setProfilePic]       = useState<PrivacyLevel>('EVERYONE')
   const [readReceipts, setReadReceipts]   = useState(true)
   const [saving, setSaving]               = useState(false)
+
+  const toggleBlocked = async () => {
+    if (!showBlocked) {
+      setLoadingBlocked(true)
+      try {
+        const data = await blockApi.getBlocked()
+        setBlockedUsers(data)
+      } catch { /* silent */ } finally { setLoadingBlocked(false) }
+    }
+    setShowBlocked(v => !v)
+  }
+
+  const handleUnblock = async (userId: number) => {
+    try {
+      await blockApi.unblock(userId)
+      setBlockedUsers(prev => prev.filter(u => u.id !== userId))
+    } catch { /* silent */ }
+  }
 
   const LEVELS: { value: PrivacyLevel; label: string }[] = [
     { value: 'EVERYONE', label: 'Todos' },
@@ -550,6 +571,47 @@ function AccountSection() {
           }}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>
+        </div>
+      )}
+
+      {/* Blocked users */}
+      <button onClick={toggleBlocked} style={rowStyle}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 500, color: c.text, marginBottom: 2 }}>Contactos bloqueados</p>
+          <p style={{ fontSize: 12, color: c.textSub }}>
+            {blockedUsers.length > 0 && showBlocked ? `${blockedUsers.length} bloqueado${blockedUsers.length !== 1 ? 's' : ''}` : 'Gestiona quién está bloqueado'}
+          </p>
+        </div>
+        <svg width="16" height="16" fill="none" stroke={c.textSub} strokeWidth="2" viewBox="0 0 24 24">
+          <path d={showBlocked ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {showBlocked && (
+        <div style={{ padding: '12px 16px', borderRadius: 16, background: c.accent, border: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {loadingBlocked ? (
+            <p style={{ fontSize: 13, color: c.textSub, textAlign: 'center', padding: '8px 0' }}>Cargando…</p>
+          ) : blockedUsers.length === 0 ? (
+            <p style={{ fontSize: 13, color: c.textSub, textAlign: 'center', padding: '8px 0' }}>No tienes usuarios bloqueados</p>
+          ) : blockedUsers.map(u => (
+            <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', borderRadius: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: c.rowBg, flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {u.avatarUrl
+                  ? <img src={u.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-primary,#7a9048)' }}>{u.name[0]?.toUpperCase()}</span>
+                }
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</p>
+              </div>
+              <button
+                onClick={() => handleUnblock(u.id)}
+                style={{ padding: '5px 12px', borderRadius: 10, border: `1.5px solid ${c.border}`, background: 'transparent', cursor: 'pointer', fontSize: 12, color: c.textSub, fontFamily: "'Poppins',system-ui,sans-serif" }}
+              >
+                Desbloquear
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

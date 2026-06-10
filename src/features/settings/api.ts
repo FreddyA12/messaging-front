@@ -48,3 +48,24 @@ export const userApi = {
     })
   },
 }
+
+export interface BlockedUserDTO {
+  id: number
+  name: string
+  avatarUrl: string | null
+  blockedAt: string
+}
+
+export const blockApi = {
+  getBlocked: () =>
+    api.get<BlockedUserDTO[]>('/api/users/blocked').then((r) => r.data),
+
+  block: (userId: number) =>
+    api.post(`/api/users/${userId}/block`),
+
+  unblock: (userId: number) =>
+    api.delete(`/api/users/${userId}/block`),
+
+  report: (userId: number, reason: string, description?: string) =>
+    api.post(`/api/users/${userId}/report`, { reason, description }),
+}

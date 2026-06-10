@@ -66,6 +66,7 @@ export function useWebRTC(): UseWebRTCResult {
   const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null)
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([])
   const facingModeRef = useRef<'user' | 'environment'>('user')
+  const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Accumulates remote tracks by ID so renegotiation (video escalation) always
   // produces a new MediaStream reference and triggers React re-renders correctly.
   const remoteTracksRef = useRef<Map<string, MediaStreamTrack>>(new Map())
@@ -77,7 +78,15 @@ export function useWebRTC(): UseWebRTCResult {
     })
   }, [])
 
+  const clearRingTimeout = useCallback(() => {
+    if (ringTimeoutRef.current) {
+      clearTimeout(ringTimeoutRef.current)
+      ringTimeoutRef.current = null
+    }
+  }, [])
+
   const cleanup = useCallback(() => {
+    clearRingTimeout()
     pcRef.current?.close()
     pcRef.current = null
     pendingOfferRef.current = null
@@ -85,7 +94,7 @@ export function useWebRTC(): UseWebRTCResult {
     remoteTracksRef.current.clear()
     stopLocalTracks()
     setRemoteStream(null)
-  }, [stopLocalTracks])
+  }, [stopLocalTracks, clearRingTimeout])
 
   const drainPendingCandidates = useCallback(async () => {
     const pc = pcRef.current
@@ -137,11 +146,13 @@ export function useWebRTC(): UseWebRTCResult {
     async (peerId, peerName, type, chatId) => {
       if (!currentUser) return
       try {
-        const { callId } = await callApi.initiate({ calleeId: peerId, chatId, type })
-        startOutgoing({ callId, type, peerId, peerName })
-
+        // Request media first — must happen before any async network call so the
+        // browser's user-activation context is still valid for getUserMedia.
         const stream = await getUserMedia(true, type === 'VIDEO')
         setLocalStream(stream)
+
+        const { callId } = await callApi.initiate({ calleeId: peerId, chatId, type })
+        startOutgoing({ callId, type, peerId, peerName })
 
         const pc = createPeerConnection(callId, peerId)
         pcRef.current = pc
@@ -155,6 +166,18 @@ export function useWebRTC(): UseWebRTCResult {
 
         // await so the offer is guaranteed to arrive before ICE candidates
         await publish('/app/call.offer', { callId, to: peerId, callType: type, sdp: offer })
+
+        // Auto-cancel if not answered within 40 seconds
+        ringTimeoutRef.current = setTimeout(async () => {
+          const state = useCallStore.getState()
+          if (state.call?.phase === 'RINGING_OUT') {
+            const id = state.call.callId
+            await callApi.end(id).catch(() => {})
+            publish('/app/call.end', { callId: id, to: peerId }).catch(() => {})
+            cleanup()
+            endCallInStore()
+          }
+        }, 40_000)
       } catch (err) {
         console.error('startCall failed:', err)
         cleanup()
