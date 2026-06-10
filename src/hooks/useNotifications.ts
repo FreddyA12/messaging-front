@@ -21,7 +21,7 @@ export function useNotifications() {
 
   // Watch for new messages and notify if tab is not focused
   useEffect(() => {
-    if (!currentUser || Notification.permission !== 'granted') return
+    if (!currentUser || !('Notification' in window) || Notification.permission !== 'granted') return
     if (document.hasFocus()) return
 
     // Get the most recent message across all chats

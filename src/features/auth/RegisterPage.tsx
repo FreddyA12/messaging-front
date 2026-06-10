@@ -6,6 +6,8 @@ import { authApi } from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useEncryptionStore } from '../../store/encryptionStore'
 import { deriveKey } from '../../lib/afin'
+import { sha256 } from '../../lib/hash'
+import { encryptTransit } from '../../lib/transitEncryption'
 
 const schema = z.object({
   name: z.string().min(1, 'El nombre es requerido').max(100),
@@ -51,7 +53,7 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      const res = await authApi.register(data)
+      const res = await authApi.register({ name: encryptTransit(data.name), email: encryptTransit(data.email), password: await sha256(data.password) })
       setAuth(res.user, res.accessToken, res.refreshToken)
       const { a, b } = deriveKey(res.user.id)
       useEncryptionStore.getState().setKey(a, b)

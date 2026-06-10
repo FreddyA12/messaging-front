@@ -19,6 +19,7 @@ interface AuthState {
 
   setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void
   updateAccessToken: (accessToken: string) => void
+  updateTokens: (accessToken: string, refreshToken: string) => void
   clearAuth: () => void
 }
 
@@ -36,6 +37,9 @@ export const useAuthStore = create<AuthState>()(
       updateAccessToken: (accessToken) =>
         set({ accessToken }),
 
+      updateTokens: (accessToken: string, refreshToken: string) =>
+        set({ accessToken, refreshToken }),
+
       clearAuth: () => {
         import('./encryptionStore').then(({ useEncryptionStore }) => {
           useEncryptionStore.getState().clearKey()
@@ -48,7 +52,6 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),

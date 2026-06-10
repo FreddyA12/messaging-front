@@ -28,7 +28,7 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const { refreshToken, updateAccessToken, clearAuth } = useAuthStore.getState()
+    const { refreshToken, updateAccessToken, updateTokens, clearAuth } = useAuthStore.getState()
 
     if (!refreshToken) {
       clearAuth()
@@ -48,12 +48,13 @@ api.interceptors.response.use(
     isRefreshing = true
 
     try {
+      const { encryptTransit } = await import('./transitEncryption')
       const { data } = await axios.post(
         `${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/api/auth/refresh`,
-        { refreshToken },
+        { refreshToken: encryptTransit(refreshToken) },
       )
 
-      updateAccessToken(data.accessToken)
+      updateTokens(data.accessToken, data.refreshToken)
       pendingRequests.forEach((cb) => cb(data.accessToken))
       pendingRequests = []
 

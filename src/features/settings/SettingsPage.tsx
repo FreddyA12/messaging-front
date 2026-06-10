@@ -8,6 +8,7 @@ import {
   type ThemeMode, type ChatBg, type Palette, type FontSize,
 } from '../../store/appearanceStore'
 import { settingsApi, userApi } from './api'
+import { encryptUserField, decryptUserField } from '../../lib/userEncryption'
 
 type Section = 'profile' | 'chats' | 'notifications' | 'account'
 
@@ -143,8 +144,10 @@ function ProfileSection() {
   const localStatus = useAppearanceStore(s => s.localStatus)
   const setLocalStatus = useAppearanceStore(s => s.setLocalStatus)
   const [editingStatus, setEditingStatus] = useState(false)
-  const [draft, setDraft] = useState(localStatus || user?.statusText || '')
-  const displayStatus = localStatus || user?.statusText || 'Hola, estoy usando Whispr'
+  const rawStatus = user?.statusText ?? ''
+  const decryptedStatus = (user?.id && rawStatus) ? decryptUserField(rawStatus, user.id) : rawStatus
+  const [draft, setDraft] = useState(localStatus || decryptedStatus)
+  const displayStatus = localStatus || decryptedStatus || 'Hola, estoy usando Whispr'
   const [saving, setSaving] = useState(false)
   const [avatarBust, setAvatarBust] = useState(0)
   const [avatarFailed, setAvatarFailed] = useState(false)
@@ -156,7 +159,7 @@ function ProfileSection() {
     setEditingStatus(false)
     setSaving(true)
     try {
-      await userApi.updateProfile({ statusText: value })
+      await userApi.updateProfile({ statusText: user?.id ? encryptUserField(value, user.id) : value })
     } catch { /* silent */ } finally {
       setSaving(false)
     }
